@@ -8,6 +8,31 @@ class TransformTest < Minitest::Spec
 
 require "trailblazer/operation"
 
+class Collection < Trailblazer::Operation
+  def self.compute_end( (ctx, flow_options), ** )
+    results = ctx[:results]
+
+    was_success = !results.find { |(evt, _)| evt.class != Trailblazer::Operation::Railway::End::Success }
+
+    ctx[:value] = results.collect { |(evt, (ctx,_))| ctx[:value] }
+
+    return was_success ? Trailblazer::Activity::Right : Trailblazer::Activity::Left , [ctx, flow_options]
+  end
+
+  def self.run_instances( (ctx, flow_options), **circuit_options )
+    ctx[:results] = ctx[:value].collect { |data| ctx[:instance].decompose.first.( [{value: data}, flow_options], circuit_options.merge( exec_context: ctx[:instance].new ) ) }
+
+    return Trailblazer::Activity::Right, [ ctx, flow_options ]
+  end
+
+  step task: method(:run_instances), id: "run_instances"
+  step( {:task => method(:compute_end),
+    id: "compute_end" },
+    {Output("FragmentBlank", :fragment_blank) => End(:fragment_blank, :fragment_blank)}, # not used, currently.
+    )
+
+end
+
 class PriceFloat < Trailblazer::Operation
   step :filled?
   step :coerce_string # success: is string, fail: is nil
@@ -117,6 +142,17 @@ end
     end
   end
 
+  describe "Collection( PriceFloat )" do
+    let(:collection) { Collection.decompose.first }
+
+    it "correct collection" do
+      signal, (ctx, _) = collection.( [ { value: ["9.8", "1.2"], instance: PriceFloat } ], exec_context: Collection.new )
+
+      signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Success}
+      ctx[:value].inspect.must_equal %{[980, 120]}
+    end
+  end
+
   let(:activity) { ExpenseUnitPrice.decompose.first }
 
   it "fragment not found" do
@@ -154,6 +190,8 @@ end
 # The problem: a coercion _is_ a validation, but without an error msg etc, so why not simply chain it using
 # the Activity mechanics that we already have?
 # Much much more explicit than Reform
+#
+# no hard-to-learn DSL, but this all translates to TRB mechanics
 
   # In the UI, we want the "Reform style" where an object graph represents the form UI
   class Transformer::UI # this is the document coming in

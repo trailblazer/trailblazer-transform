@@ -7,3 +7,5 @@ gemspec
 
 gem "trailblazer-operation", path: "../operation"
 gem "trailblazer-activity", path: "../trailblazer-circuit"
+
+gem "minitest-line"
