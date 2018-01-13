@@ -1,5 +1,7 @@
 require "test_helper"
 
+require "ostruct"
+
 class TransformTest < Minitest::Spec
 
   module Transformer
@@ -77,10 +79,19 @@ class PriceFloat < Trailblazer::Operation
   end
 end
 
+# Normal configuration, like "property".
+# This simply processes `hash[:unit_price]`.
 class ExpenseUnitPrice < Trailblazer::Operation
   step :parse # sucess: fragment found
   fail :error_required, fail_fast: true # implies it wasn't sent! here, we could default
 
+  step({task: ->((ctx, flow_options), **circuit_options) do
+    PriceFloat.decompose.first.( [ctx, flow_options], circuit_options.merge( exec_context: PriceFloat.new ) )
+  end, id: "PriceFloat"},
+    PriceFloat.outputs[:fail_fast] => :fail_fast,
+    PriceFloat.outputs[:failure] => :failure,
+    PriceFloat.outputs[:success] => :success,
+  )
 
   step :set
 
@@ -150,8 +161,8 @@ end
   #   => End.failure, invalid
   #
   #  interface
-  #   ctx[:error]
-  #   ctx[:value] : collected result items
+  #   ctx[:error] : array of errors
+  #   ctx[:value] : array of collected results
   describe "Collection( PriceFloat )" do
     let(:collection) { Collection.decompose.first }
 
@@ -171,35 +182,44 @@ end
     end
   end
 
-  # let(:activity) { ExpenseUnitPrice.decompose.first }
+  # ExpenseUnitPrice
+  #  ends:
+  #   => End.fail_fast => FragmentNotFound/FragmentBlank
+  #   => End.success
+  #   => End.failure, invalid
+  #
+  #  interface
+  #   ctx[:error]
+  #   ctx[:value]
+  let(:activity) { ExpenseUnitPrice.decompose.first }
 
-  # it "fragment not found" do
-  #   signal, (ctx, _) = activity.( [ { }, {} ], exec_context: ExpenseUnitPrice.new )
+  it "fragment not found" do
+    signal, (ctx, _) = activity.( [ { }, {} ], exec_context: ExpenseUnitPrice.new )
 
-  #   signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::FailFast}
-  #   ctx[:error].must_equal %{Fragment :unit_price not found}
-  # end
+    signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::FailFast}
+    ctx[:error].must_equal %{Fragment :unit_price not found}
+  end
 
-  # it "fragment nil" do
-  #   signal, (ctx, _) = activity.( [ { unit_price: nil }, {} ], exec_context: ExpenseUnitPrice.new )
+  it "fragment nil" do
+    signal, (ctx, _) = activity.( [ { unit_price: nil }, {} ], exec_context: ExpenseUnitPrice.new )
 
-  #   signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::FailFast}
-  #   ctx[:error].must_equal %{nil is blank string}
-  # end
+    signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::FailFast}
+    ctx[:error].must_equal %{nil is blank string}
+  end
 
-  # it "wrong format" do
-  #   signal, (ctx, _) = activity.( [ { unit_price: " bla " }, {} ], exec_context: ExpenseUnitPrice.new )
+  it "wrong format" do
+    signal, (ctx, _) = activity.( [ { unit_price: " bla " }, {} ], exec_context: ExpenseUnitPrice.new )
 
-  #   signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Failure}
-  #   ctx[:error].must_equal %{"bla" is wrong format}
-  # end
+    signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Failure}
+    ctx[:error].must_equal %{"bla" is wrong format}
+  end
 
-  # it "correct format" do
-  #   signal, (ctx, _) = activity.( [ { unit_price: "9.8", model: OpenStruct.new }, {} ], exec_context: ExpenseUnitPrice.new )
+  it "correct format" do
+    signal, (ctx, _) = activity.( [ { unit_price: "9.8", model: OpenStruct.new }, {} ], exec_context: ExpenseUnitPrice.new )
 
-  #   signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Success}
-  #   ctx[:model].inspect.must_equal %{#<OpenStruct unit_price=980>}
-  # end
+    signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Success}
+    ctx[:model].inspect.must_equal %{#<OpenStruct unit_price=980>}
+  end
 
 =begin
 
