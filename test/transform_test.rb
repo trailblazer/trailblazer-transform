@@ -15,6 +15,7 @@ class Collection < Trailblazer::Operation
     was_success = !results.find { |(evt, _)| evt.class != Trailblazer::Operation::Railway::End::Success }
 
     ctx[:value] = results.collect { |(evt, (ctx,_))| ctx[:value] }
+    ctx[:error] = results.collect { |(evt, (ctx,_))| ctx[:error] }
 
     return was_success ? Trailblazer::Activity::Right : Trailblazer::Activity::Left , [ctx, flow_options]
   end
@@ -142,6 +143,15 @@ end
     end
   end
 
+  # Collection
+  #  ends:
+  #   => FragmentNotFound/FragmentBlank
+  #   => End.success
+  #   => End.failure, invalid
+  #
+  #  interface
+  #   ctx[:error]
+  #   ctx[:value] : collected result items
   describe "Collection( PriceFloat )" do
     let(:collection) { Collection.decompose.first }
 
@@ -151,37 +161,45 @@ end
       signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Success}
       ctx[:value].inspect.must_equal %{[980, 120]}
     end
+
+    it "invalid collection" do
+      signal, (ctx, _) = collection.( [ { value: ["9.8", "bla"], instance: PriceFloat } ], exec_context: Collection.new )
+
+      signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Failure}
+      ctx[:value].inspect.must_equal %{[980, "bla"]}
+      ctx[:error].inspect.must_equal %{[nil, "\\"bla\\" is wrong format"]}
+    end
   end
 
-  let(:activity) { ExpenseUnitPrice.decompose.first }
+  # let(:activity) { ExpenseUnitPrice.decompose.first }
 
-  it "fragment not found" do
-    signal, (ctx, _) = activity.( [ { }, {} ], exec_context: ExpenseUnitPrice.new )
+  # it "fragment not found" do
+  #   signal, (ctx, _) = activity.( [ { }, {} ], exec_context: ExpenseUnitPrice.new )
 
-    signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::FailFast}
-    ctx[:error].must_equal %{Fragment :unit_price not found}
-  end
+  #   signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::FailFast}
+  #   ctx[:error].must_equal %{Fragment :unit_price not found}
+  # end
 
-  it "fragment nil" do
-    signal, (ctx, _) = activity.( [ { unit_price: nil }, {} ], exec_context: ExpenseUnitPrice.new )
+  # it "fragment nil" do
+  #   signal, (ctx, _) = activity.( [ { unit_price: nil }, {} ], exec_context: ExpenseUnitPrice.new )
 
-    signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::FailFast}
-    ctx[:error].must_equal %{nil is blank string}
-  end
+  #   signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::FailFast}
+  #   ctx[:error].must_equal %{nil is blank string}
+  # end
 
-  it "wrong format" do
-    signal, (ctx, _) = activity.( [ { unit_price: " bla " }, {} ], exec_context: ExpenseUnitPrice.new )
+  # it "wrong format" do
+  #   signal, (ctx, _) = activity.( [ { unit_price: " bla " }, {} ], exec_context: ExpenseUnitPrice.new )
 
-    signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Failure}
-    ctx[:error].must_equal %{"bla" is wrong format}
-  end
+  #   signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Failure}
+  #   ctx[:error].must_equal %{"bla" is wrong format}
+  # end
 
-  it "correct format" do
-    signal, (ctx, _) = activity.( [ { unit_price: "9.8", model: OpenStruct.new }, {} ], exec_context: ExpenseUnitPrice.new )
+  # it "correct format" do
+  #   signal, (ctx, _) = activity.( [ { unit_price: "9.8", model: OpenStruct.new }, {} ], exec_context: ExpenseUnitPrice.new )
 
-    signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Success}
-    ctx[:model].inspect.must_equal %{#<OpenStruct unit_price=980>}
-  end
+  #   signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Success}
+  #   ctx[:model].inspect.must_equal %{#<OpenStruct unit_price=980>}
+  # end
 
 =begin
 
@@ -192,6 +210,8 @@ end
 # Much much more explicit than Reform
 #
 # no hard-to-learn DSL, but this all translates to TRB mechanics
+#
+# :value in the end is immutable graph with all coerced objects/scalars
 
   # In the UI, we want the "Reform style" where an object graph represents the form UI
   class Transformer::UI # this is the document coming in
