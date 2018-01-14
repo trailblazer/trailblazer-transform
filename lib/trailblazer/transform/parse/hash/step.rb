@@ -10,9 +10,9 @@ module Trailblazer
           end
 
                 # We could use Representable here.
-          def call(ctx, **)
-            return unless ctx.key?(@name)
-            ctx[:value] = ctx[@name]
+          def call(ctx, document:, **)
+            return unless document.key?(@name)
+            ctx[:value] = document[@name]
             true
           end
         end

@@ -8,6 +8,8 @@ class TransformTest < Minitest::Spec
 
 require "trailblazer/operation"
 
+# @needs :value
+# @gives :value
 class Collection < Trailblazer::Operation
   def self.compute_end( (ctx, flow_options), ** )
     results = ctx[:results]
@@ -34,6 +36,8 @@ class Collection < Trailblazer::Operation
 
 end
 
+# ::property
+# @needs :value
 class PriceFloat < Trailblazer::Operation
   step :filled?
   step :coerce_string # success: is string, fail: is nil
@@ -91,13 +95,28 @@ module Steps
   def set(ctx, value:, model:, **)
     model.unit_price = value
   end
+
+
+
+  def self.set(ctx, value:, model:, **)
+    model.unit_price = value
+  end
+
+    # I could be an End event, no step
+  def self.error_required(ctx, **)
+    ctx[:error] = "Fragment :unit_price not found"
+    false
+  end
 end
 
 # Normal configuration, like "property".
 # This simply processes `hash[:unit_price]`.
-class ExpenseUnitPrice < Trailblazer::Operation
+# @needs :document
+# @needs :model
+# @gives :value
+class DeserializeUnitPrice < Trailblazer::Operation
   step Parse::Hash::Step::Read.new(name: :unit_price) # sucess: fragment found
-  fail :error_required, fail_fast: true # implies it wasn't sent! here, we could default
+  fail Steps.method(:error_required), fail_fast: true # implies it wasn't sent! here, we could default
 
   step({task: ->((ctx, flow_options), **circuit_options) do
     PriceFloat.decompose.first.( [ctx, flow_options], circuit_options.merge( exec_context: PriceFloat.new ) )
@@ -107,14 +126,22 @@ class ExpenseUnitPrice < Trailblazer::Operation
     PriceFloat.outputs[:success] => :success,
   )
 
-  step :set
+  step Steps.method(:set)
 
   # fail :parse_items_zero
-  include Steps
 end
 
 # "custom" chainset
 class UnitPriceOrItems < Trailblazer::Operation
+  def self.items_present?(ctx, document:, **)
+    return unless document.key?(:items)
+    document[:items].size > 0
+  end
+
+  def self.set_items(ctx, value:, model:, **)
+    model.items = value
+  end
+
   step Parse::Hash::Step::Read.new(name: :unit_price), fail_fast: true # sucess: fragment found
   step({task: ->((ctx, flow_options), **circuit_options) do
     PriceFloat.decompose.first.( [ctx, flow_options], circuit_options.merge( exec_context: PriceFloat.new ) )
@@ -123,13 +150,13 @@ class UnitPriceOrItems < Trailblazer::Operation
     PriceFloat.outputs[:failure] => :failure,
     PriceFloat.outputs[:success] => :success,
   )
-  step :set, Output(:success) => "End.success"
+  step Steps.method(:set), Output(:success) => "End.success"
 
   # this used to be implicit by placing `collection :items` after `property :unit_price`.
-  step :items_present?, magnetic_to: [:fail_fast], fail_fast: true# success===> run Collection(PriceFloat), fail==>invalid, nothing given
+  step method(:items_present?), magnetic_to: [:fail_fast], fail_fast: true# success===> run Collection(PriceFloat), fail==>invalid, nothing given
   fail :error_required, magnetic_to: [:fail_fast], fail_fast: true
 
-  step :collection_parse
+  step Parse::Hash::Step::Read.new(name: :items)
   step({task: ->((ctx, flow_options), **circuit_options) do
     Collection.decompose.first.( [ctx, flow_options], circuit_options.merge( exec_context: Collection.new ) )
   end, id: "items"},
@@ -138,42 +165,31 @@ class UnitPriceOrItems < Trailblazer::Operation
     Collection.outputs[:success] => :success,
   )
 
-  step :set_items
+  step method(:set_items)
 
 
   include Steps
 
-  def items_present?(ctx, **)
-    return unless ctx.key?(:items)
-    ctx[:items].size > 0
-  end
 
   def error_required(ctx, **)
     ctx[:error] = "Fragment :unit_price not found, and no items"
     false
   end
 
-  def collection_parse(ctx, **)
-    ctx[:value] = ctx[:items]
-  end
-
-  def set_items(ctx, value:, model:, **)
-    model.items = value
-  end
 end
 
   describe "UnitPriceOrItems" do
     let(:activity) { UnitPriceOrItems.decompose.first }
 
     it "fragment not found" do
-      signal, (ctx, _) = activity.( [ { }, {} ], exec_context: UnitPriceOrItems.new )
+      signal, (ctx, _) = activity.( [ { document: {} }, {} ], exec_context: UnitPriceOrItems.new )
 
       signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::FailFast} # FailFast signalizes "nothing found, for both paths"
       ctx[:error].must_equal %{Fragment :unit_price not found, and no items}
     end
 
     it ":unit_price given" do
-      signal, (ctx, _) = activity.( [ { unit_price: " 2.7  ", model: OpenStruct.new }, {} ], exec_context: UnitPriceOrItems.new )
+      signal, (ctx, _) = activity.( [ { document: { unit_price: " 2.7  " }, model: OpenStruct.new }, {} ], exec_context: UnitPriceOrItems.new )
 
       signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Success} # FailFast signalizes "nothing found, for both paths"
       ctx[:error].must_be_nil
@@ -181,14 +197,14 @@ end
     end
 
     it "incorrect :unit_price" do
-      signal, (ctx, _) = activity.( [ { unit_price: "999" }, {} ], exec_context: UnitPriceOrItems.new )
+      signal, (ctx, _) = activity.( [ {document: { unit_price: "999" }}, {} ], exec_context: UnitPriceOrItems.new )
 
       signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Failure} # FailFast signalizes "nothing found, for both paths"
       ctx[:error].must_equal %{"999" is wrong format}
     end
 
     it ":items given" do
-      signal, (ctx, _) = activity.( [ { items: [ "9.9" ], model: OpenStruct.new, instance: PriceFloat }, {} ], exec_context: UnitPriceOrItems.new )
+      signal, (ctx, _) = activity.( [ { document: {items: [ "9.9" ]}, model: OpenStruct.new, instance: PriceFloat }, {} ], exec_context: UnitPriceOrItems.new )
       # signal, (ctx, _) = activity.( [ { unit_price: "", items: [ "9.9" ], model: OpenStruct.new }, {} ], exec_context: UnitPriceOrItems.new )
 
       signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Success} # FailFast signalizes "nothing found, for both paths"
@@ -198,7 +214,27 @@ end
   end
 
 class Item < Trailblazer::Operation
+  def self.populator(ctx, **)
+    ctx[:model] = Struct.new(:unit_price).new
+  end
 
+  def self.model(ctx, model:, **)
+    model.freeze
+    ctx[:value] = model
+  end
+
+  pass ->(ctx, value:, **) { ctx[:document] = value } # discuss: THIS SUCKS!
+  step method(:populator)
+  # property :unit_price
+
+  # @needs :document
+  step( {task: DeserializeUnitPrice.decompose.first, id: "deserialize_unit_price"},
+    DeserializeUnitPrice.outputs[:fail_fast] => :fail_fast,
+    DeserializeUnitPrice.outputs[:failure] => :failure,
+    DeserializeUnitPrice.outputs[:success] => :success,
+  )
+
+  step method(:model)
 end
 
   # "custom" chainset with items that are nested, again.
@@ -214,40 +250,40 @@ class UnitPriceOrNestedItems < Trailblazer::Operation
   step :set, Output(:success) => "End.success"
 
   # this used to be implicit by placing `collection :items` after `property :unit_price`.
-  step :items_present?, magnetic_to: [:fail_fast], fail_fast: true# success===> run Collection(PriceFloat), fail==>invalid, nothing given
+  step UnitPriceOrItems.method(:items_present?), magnetic_to: [:fail_fast], fail_fast: true# success===> run Collection(PriceFloat), fail==>invalid, nothing given
   fail :error_required, magnetic_to: [:fail_fast], fail_fast: true
 
-  step :collection_parse
+  # read :items
+  step Parse::Hash::Step::Read.new(name: :items)
+
   step({task: ->((ctx, flow_options), **circuit_options) do
-    Collection.decompose.first.( [ctx, flow_options], circuit_options.merge( exec_context: Collection.new ) )
+    ctx = ctx.merge( instance: Item ) # TODO: use :input
+
+    signal, (ctx, flow_options), _ =Collection.decompose.first.( [ctx, flow_options], circuit_options.merge( exec_context: Collection.new ) )
+
+    ctx = ctx.merge( instance: nil ) # TODO: use :output
+
+    return signal, [ctx, flow_options]
   end, id: "items"},
     # Collection.outputs[:fail_fast] => :fail_fast,
     Collection.outputs[:failure] => :failure,
     Collection.outputs[:success] => :success,
   )
 
-  step :set_items
+  def self.set_items(ctx, value:, model:, **)
+    pp ctx
+    model.items = value
+  end
+  step method(:set_items)
 
 
   include Steps
-
-  def items_present?(ctx, **)
-    return unless ctx.key?(:items)
-    ctx[:items].size > 0
-  end
 
   def error_required(ctx, **)
     ctx[:error] = "Fragment :unit_price not found, and no items"
     false
   end
 
-  def collection_parse(ctx, **)
-    ctx[:value] = ctx[:items]
-  end
-
-  def set_items(ctx, value:, model:, **)
-    model.items = value
-  end
 end
 
   describe "UnitPriceOrNestedItems" do
@@ -276,11 +312,10 @@ end
     # end
 
     it ":items given" do
-      signal, (ctx, _) = activity.( [ { items: [ "9.9" ], model: OpenStruct.new, instance: PriceFloat }, {} ], exec_context: UnitPriceOrItems.new )
-      # signal, (ctx, _) = activity.( [ { unit_price: "", items: [ "9.9" ], model: OpenStruct.new }, {} ], exec_context: UnitPriceOrItems.new )
+      signal, (ctx, _) = activity.( [ {document: { items: [ {unit_price: "9.9"} ] }, model: OpenStruct.new }, {} ] )
 
       signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Success} # FailFast signalizes "nothing found, for both paths"
-      ctx[:model].inspect.must_equal %{#<OpenStruct items=[990]>}
+      ctx[:model].inspect.must_equal %{#<OpenStruct items=[#<struct unit_price=990>]>}
       ctx[:error].must_be_nil
     end
   end
@@ -347,7 +382,7 @@ end
     end
   end
 
-  # ExpenseUnitPrice
+  # DeserializeUnitPrice
   #  ends:
   #   => End.fail_fast => FragmentNotFound/FragmentBlank
   #   => End.success
@@ -356,31 +391,31 @@ end
   #  interface
   #   ctx[:error]
   #   ctx[:value]
-  let(:activity) { ExpenseUnitPrice.decompose.first }
+  let(:activity) { DeserializeUnitPrice.decompose.first }
 
   it "fragment not found" do
-    signal, (ctx, _) = activity.( [ { }, {} ], exec_context: ExpenseUnitPrice.new )
+    signal, (ctx, _) = activity.( [ { document: {} }, {} ] )
 
     signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::FailFast}
     ctx[:error].must_equal %{Fragment :unit_price not found}
   end
 
   it "fragment nil" do
-    signal, (ctx, _) = activity.( [ { unit_price: nil }, {} ], exec_context: ExpenseUnitPrice.new )
+    signal, (ctx, _) = activity.( [ {document: { unit_price: nil }}, {} ] )
 
     signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::FailFast}
     ctx[:error].must_equal %{nil is blank string}
   end
 
   it "wrong format" do
-    signal, (ctx, _) = activity.( [ { unit_price: " bla " }, {} ], exec_context: ExpenseUnitPrice.new )
+    signal, (ctx, _) = activity.( [ { document: { unit_price: " bla " } }, {} ] )
 
     signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Failure}
     ctx[:error].must_equal %{"bla" is wrong format}
   end
 
   it "correct format" do
-    signal, (ctx, _) = activity.( [ { unit_price: "9.8", model: OpenStruct.new }, {} ], exec_context: ExpenseUnitPrice.new )
+    signal, (ctx, _) = activity.( [ { document: { unit_price: "9.8"}, model: OpenStruct.new }, {} ] )
 
     signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Success}
     ctx[:model].inspect.must_equal %{#<OpenStruct unit_price=980>}
