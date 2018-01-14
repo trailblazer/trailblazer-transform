@@ -1,10 +1,10 @@
 lib = File.expand_path("../lib", __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require "transform/version"
+require "trailblazer/transform/version"
 
 Gem::Specification.new do |spec|
   spec.name          = "transform"
-  spec.version       = Transform::VERSION
+  spec.version       = Trailblazer::Transform::VERSION
   spec.authors       = ["Nick Sutterer"]
   spec.email         = ["apotonick@gmail.com"]
 
