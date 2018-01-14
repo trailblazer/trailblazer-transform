@@ -119,7 +119,6 @@ class ExpenseUnitPrice < Trailblazer::Operation
   step :set
 
   # fail :parse_items_zero
-
   include Steps
 end
 
@@ -133,19 +132,30 @@ class UnitPriceOrItems < Trailblazer::Operation
     PriceFloat.outputs[:failure] => :failure,
     PriceFloat.outputs[:success] => :success,
   )
+  step :set, Output(:success) => "End.success"
 
   # this used to be implicit by placing `collection :items` after `property :unit_price`.
   step :items_present?, magnetic_to: [:fail_fast], fail_fast: true# success===> run Collection(PriceFloat), fail==>invalid, nothing given
   fail :error_required, magnetic_to: [:fail_fast], fail_fast: true
 
-  step :set
+  step :collection_parse
+
+
 
   include Steps
 
   def items_present?(ctx, **)
     return unless ctx.key?(:items)
-    ctx[:value] = ctx[:items]
     ctx[:items].size > 0
+  end
+
+  def error_required(ctx, **)
+    ctx[:error] = "Fragment :unit_price not found, and no items"
+    false
+  end
+
+  def collection_parse(ctx, **)
+    ctx[:value] = ctx[:items]
   end
 end
 
@@ -156,7 +166,31 @@ end
       signal, (ctx, _) = activity.( [ { }, {} ], exec_context: UnitPriceOrItems.new )
 
       signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::FailFast} # FailFast signalizes "nothing found, for both paths"
-      ctx[:error].must_equal %{Fragment :unit_price not found}
+      ctx[:error].must_equal %{Fragment :unit_price not found, and no items}
+    end
+
+    it ":unit_price given" do
+      signal, (ctx, _) = activity.( [ { unit_price: " 2.7  ", model: OpenStruct.new }, {} ], exec_context: UnitPriceOrItems.new )
+
+      signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Success} # FailFast signalizes "nothing found, for both paths"
+      ctx[:error].must_be_nil
+      ctx[:model].inspect.must_equal %{#<OpenStruct unit_price=270>}
+    end
+
+    it "incorrect :unit_price" do
+      signal, (ctx, _) = activity.( [ { unit_price: "999" }, {} ], exec_context: UnitPriceOrItems.new )
+
+      signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Failure} # FailFast signalizes "nothing found, for both paths"
+      ctx[:error].must_equal %{"999" is wrong format}
+    end
+
+    it ":items given" do
+      signal, (ctx, _) = activity.( [ { items: [ "9.9" ], model: OpenStruct.new }, {} ], exec_context: UnitPriceOrItems.new )
+      # signal, (ctx, _) = activity.( [ { unit_price: "", items: [ "9.9" ], model: OpenStruct.new }, {} ], exec_context: UnitPriceOrItems.new )
+
+      signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Success} # FailFast signalizes "nothing found, for both paths"
+      ctx[:error].must_be_nil
+      ctx[:model].inspect.must_equal %{#<OpenStruct unit_price=270>}
     end
   end
 
