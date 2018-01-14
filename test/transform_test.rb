@@ -79,26 +79,8 @@ class PriceFloat < Trailblazer::Operation
   end
 end
 
-# Normal configuration, like "property".
-# This simply processes `hash[:unit_price]`.
-class ExpenseUnitPrice < Trailblazer::Operation
-  step :parse # sucess: fragment found
-  fail :error_required, fail_fast: true # implies it wasn't sent! here, we could default
-
-  step({task: ->((ctx, flow_options), **circuit_options) do
-    PriceFloat.decompose.first.( [ctx, flow_options], circuit_options.merge( exec_context: PriceFloat.new ) )
-  end, id: "PriceFloat"},
-    PriceFloat.outputs[:fail_fast] => :fail_fast,
-    PriceFloat.outputs[:failure] => :failure,
-    PriceFloat.outputs[:success] => :success,
-  )
-
-  step :set
-
-  # fail :parse_items_zero
-
-
-  # We could use Representable here.
+module Steps
+    # We could use Representable here.
   def parse(ctx, **)
     return unless ctx.key?(:unit_price)
     ctx[:value] = ctx[:unit_price]
@@ -119,6 +101,64 @@ class ExpenseUnitPrice < Trailblazer::Operation
     model.unit_price = value
   end
 end
+
+# Normal configuration, like "property".
+# This simply processes `hash[:unit_price]`.
+class ExpenseUnitPrice < Trailblazer::Operation
+  step :parse # sucess: fragment found
+  fail :error_required, fail_fast: true # implies it wasn't sent! here, we could default
+
+  step({task: ->((ctx, flow_options), **circuit_options) do
+    PriceFloat.decompose.first.( [ctx, flow_options], circuit_options.merge( exec_context: PriceFloat.new ) )
+  end, id: "PriceFloat"},
+    PriceFloat.outputs[:fail_fast] => :fail_fast,
+    PriceFloat.outputs[:failure] => :failure,
+    PriceFloat.outputs[:success] => :success,
+  )
+
+  step :set
+
+  # fail :parse_items_zero
+
+  include Steps
+end
+
+# "custom" chainset
+class UnitPriceOrItems < Trailblazer::Operation
+  step :parse, fail_fast: true # sucess: fragment found
+  step({task: ->((ctx, flow_options), **circuit_options) do
+    PriceFloat.decompose.first.( [ctx, flow_options], circuit_options.merge( exec_context: PriceFloat.new ) )
+  end, id: "PriceFloat"},
+    PriceFloat.outputs[:fail_fast] => :fail_fast,
+    PriceFloat.outputs[:failure] => :failure,
+    PriceFloat.outputs[:success] => :success,
+  )
+
+  # this used to be implicit by placing `collection :items` after `property :unit_price`.
+  step :items_present?, magnetic_to: [:fail_fast], fail_fast: true# success===> run Collection(PriceFloat), fail==>invalid, nothing given
+  fail :error_required, magnetic_to: [:fail_fast], fail_fast: true
+
+  step :set
+
+  include Steps
+
+  def items_present?(ctx, **)
+    return unless ctx.key?(:items)
+    ctx[:value] = ctx[:items]
+    ctx[:items].size > 0
+  end
+end
+
+  describe "UnitPriceOrItems" do
+    let(:activity) { UnitPriceOrItems.decompose.first }
+
+    it "fragment not found" do
+      signal, (ctx, _) = activity.( [ { }, {} ], exec_context: UnitPriceOrItems.new )
+
+      signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::FailFast} # FailFast signalizes "nothing found, for both paths"
+      ctx[:error].must_equal %{Fragment :unit_price not found}
+    end
+  end
 
   # PriceFloat
   #  ends:
@@ -232,6 +272,8 @@ end
 # no hard-to-learn DSL, but this all translates to TRB mechanics
 #
 # :value in the end is immutable graph with all coerced objects/scalars
+#
+# transform only handles UI/doc==>sane domain struct with error messages and originals. how to get that into the DB is up to you (coming soon!)
 
   # In the UI, we want the "Reform style" where an object graph represents the form UI
   class Transformer::UI # this is the document coming in
