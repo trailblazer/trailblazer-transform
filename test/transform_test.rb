@@ -139,7 +139,15 @@ class UnitPriceOrItems < Trailblazer::Operation
   fail :error_required, magnetic_to: [:fail_fast], fail_fast: true
 
   step :collection_parse
+  step({task: ->((ctx, flow_options), **circuit_options) do
+    Collection.decompose.first.( [ctx, flow_options], circuit_options.merge( exec_context: Collection.new ) )
+  end, id: "items"},
+    # Collection.outputs[:fail_fast] => :fail_fast,
+    Collection.outputs[:failure] => :failure,
+    Collection.outputs[:success] => :success,
+  )
 
+  step :set_items
 
 
   include Steps
@@ -156,6 +164,10 @@ class UnitPriceOrItems < Trailblazer::Operation
 
   def collection_parse(ctx, **)
     ctx[:value] = ctx[:items]
+  end
+
+  def set_items(ctx, value:, model:, **)
+    model.items = value
   end
 end
 
@@ -185,12 +197,12 @@ end
     end
 
     it ":items given" do
-      signal, (ctx, _) = activity.( [ { items: [ "9.9" ], model: OpenStruct.new }, {} ], exec_context: UnitPriceOrItems.new )
+      signal, (ctx, _) = activity.( [ { items: [ "9.9" ], model: OpenStruct.new, instance: PriceFloat }, {} ], exec_context: UnitPriceOrItems.new )
       # signal, (ctx, _) = activity.( [ { unit_price: "", items: [ "9.9" ], model: OpenStruct.new }, {} ], exec_context: UnitPriceOrItems.new )
 
       signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Success} # FailFast signalizes "nothing found, for both paths"
+      ctx[:model].inspect.must_equal %{#<OpenStruct items=[990]>}
       ctx[:error].must_be_nil
-      ctx[:model].inspect.must_equal %{#<OpenStruct unit_price=270>}
     end
   end
 
