@@ -462,6 +462,12 @@ end
     #/
     &parse(:items)[0]
   end
+
+
+
+  problem with UPDATE is, we always have to check all fields, and hence "require" all fields to be filled out.
+  Even if it's just a partial update, which in JSON would produce a smaller subset document, we need to go through all
+  fields. That's why web forms suck (without JS)
 =end
 
 end
