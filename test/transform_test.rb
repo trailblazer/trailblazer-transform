@@ -6,11 +6,15 @@ class TransformTest < Minitest::Spec
 
   Parse = Trailblazer::Transform::Parse
 
-require "trailblazer/operation"
+require "trailblazer/activity"
+
+Activity = Trailblazer::Activity
 
 # @needs :value
 # @gives :value
-class Collection < Trailblazer::Operation
+module Collection
+  extend Activity::Railway()
+
   def self.compute_end( (ctx, flow_options), ** )
     results = ctx[:results]
 
@@ -38,16 +42,9 @@ end
 
 # ::property
 # @needs :value
-class PriceFloat < Trailblazer::Operation
-  step :filled?
-  step :coerce_string # success: is string, fail: is nil
-  fail :error_string, fail_fast: true # FragmentNotFound/FragmentBlank
-  # step :empty?
-  step :trim
-  step :my_format
-  fail :error_format
-  step :coerce_float
-  step :float_to_int # * 100
+module PriceFloat
+  extend Activity::FastTrack()
+  module_function
 
   def error_string(ctx, value:, **)
     ctx[:error] = "#{value.inspect} is blank string"
@@ -79,6 +76,16 @@ class PriceFloat < Trailblazer::Operation
   def float_to_int(ctx, value:, **)
     ctx[:value] = (value * 100).to_i
   end
+
+  step method(:filled?)
+  step method(:coerce_string) # success: is string, fail: is nil
+  fail method(:error_string), fail_fast: true # FragmentNotFound/FragmentBlank
+  # step :empty?
+  step method(:trim)
+  step method(:my_format)
+  fail method(:error_format)
+  step method(:coerce_float)
+  step method(:float_to_int) # * 100
 end
 
 module Steps
@@ -114,13 +121,15 @@ end
 # @needs :document
 # @needs :model
 # @gives :value
-class DeserializeUnitPrice < Trailblazer::Operation
+module DeserializeUnitPrice
+  extend Activity::FastTrack()
+
   step Parse::Hash::Step::Read.new(name: :unit_price) # sucess: fragment found
   fail Steps.method(:error_required), fail_fast: true # implies it wasn't sent! here, we could default
 
-  step({task: ->((ctx, flow_options), **circuit_options) do
-    PriceFloat.decompose.first.( [ctx, flow_options], circuit_options.merge( exec_context: PriceFloat.new ) )
-  end, id: "PriceFloat"},
+  step(task: ->((ctx, flow_options), **circuit_options) do
+    PriceFloat.( [ctx, flow_options], circuit_options.merge( exec_context: PriceFloat.new ) )
+  end, id: "PriceFloat",
     PriceFloat.outputs[:fail_fast] => :fail_fast,
     PriceFloat.outputs[:failure] => :failure,
     PriceFloat.outputs[:success] => :success,
@@ -132,7 +141,9 @@ class DeserializeUnitPrice < Trailblazer::Operation
 end
 
 # "custom" chainset
-class UnitPriceOrItems < Trailblazer::Operation
+class UnitPriceOrItems
+  extend Activity::FastTrack()
+
   def self.items_present?(ctx, document:, **)
     return unless document.key?(:items)
     document[:items].size > 0
@@ -213,7 +224,9 @@ end
     end
   end
 
-class Item < Trailblazer::Operation
+class Item
+  extend Activity::Railway()
+
   def self.populator(ctx, **)
     ctx[:model] = Struct.new(:unit_price).new
   end
@@ -238,7 +251,9 @@ class Item < Trailblazer::Operation
 end
 
   # "custom" chainset with items that are nested, again.
-class UnitPriceOrNestedItems < Trailblazer::Operation
+class UnitPriceOrNestedItems
+  extend Activity::FastTrack()
+
   step Parse::Hash::Step::Read.new(name: :unit_price), fail_fast: true # sucess: fragment found
   step({task: ->((ctx, flow_options), **circuit_options) do
     PriceFloat.decompose.first.( [ctx, flow_options], circuit_options.merge( exec_context: PriceFloat.new ) )
@@ -320,6 +335,10 @@ end
     end
   end
 
+  def assert_end(activity, signal, semantic)
+    signal.must_equal activity.outputs[semantic].signal
+  end
+
   # PriceFloat
   #  ends:
   #   => FragmentNotFound/FragmentBlank
@@ -330,26 +349,24 @@ end
   #   ctx[:error]
   #   ctx[:value]
   describe "PriceFloat" do
-    let(:activity) { PriceFloat.decompose.first }
-
     it "fragment nil" do
-      signal, (ctx, _) = activity.( [ { value: nil }, {} ], exec_context: PriceFloat.new )
+      signal, (ctx, _) = PriceFloat.( [ { value: nil }, {} ] )
 
-      signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::FailFast}
+      assert_end PriceFloat, signal, :fail_fast
       ctx[:error].must_equal %{nil is blank string}
     end
 
     it "wrong format" do
-      signal, (ctx, _) = activity.( [ { value: " bla " }, {} ], exec_context: PriceFloat.new )
+      signal, (ctx, _) = PriceFloat.( [ { value: " bla " }, {} ] )
 
-      signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Failure}
+      assert_end PriceFloat, signal, :failure
       ctx[:error].must_equal %{"bla" is wrong format}
     end
 
     it "correct format" do
-      signal, (ctx, _) = activity.( [ { value: "9.8" }, {} ], exec_context: PriceFloat.new )
+      signal, (ctx, _) = PriceFloat.( [ { value: "9.8" }, {} ] )
 
-      signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Success}
+      assert_end PriceFloat, signal, :success
       ctx[:value].must_equal 980
     end
   end
@@ -391,31 +408,29 @@ end
   #  interface
   #   ctx[:error]
   #   ctx[:value]
-  let(:activity) { DeserializeUnitPrice.decompose.first }
-
   it "fragment not found" do
-    signal, (ctx, _) = activity.( [ { document: {} }, {} ] )
+    signal, (ctx, _) = DeserializeUnitPrice.( [ { document: {} }, {} ] )
 
     signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::FailFast}
     ctx[:error].must_equal %{Fragment :unit_price not found}
   end
 
   it "fragment nil" do
-    signal, (ctx, _) = activity.( [ {document: { unit_price: nil }}, {} ] )
+    signal, (ctx, _) = DeserializeUnitPrice.( [ {document: { unit_price: nil }}, {} ] )
 
     signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::FailFast}
     ctx[:error].must_equal %{nil is blank string}
   end
 
   it "wrong format" do
-    signal, (ctx, _) = activity.( [ { document: { unit_price: " bla " } }, {} ] )
+    signal, (ctx, _) = DeserializeUnitPrice.( [ { document: { unit_price: " bla " } }, {} ] )
 
     signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Failure}
     ctx[:error].must_equal %{"bla" is wrong format}
   end
 
   it "correct format" do
-    signal, (ctx, _) = activity.( [ { document: { unit_price: "9.8"}, model: OpenStruct.new }, {} ] )
+    signal, (ctx, _) = DeserializeUnitPrice.( [ { document: { unit_price: "9.8"}, model: OpenStruct.new }, {} ] )
 
     signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Success}
     ctx[:model].inspect.must_equal %{#<OpenStruct unit_price=980>}
