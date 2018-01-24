@@ -18,7 +18,7 @@ module Collection
   def self.compute_end( (ctx, flow_options), ** )
     results = ctx[:results]
 
-    was_success = !results.find { |(evt, _)| evt.class != Trailblazer::Operation::Railway::End::Success }
+    was_success = !results.find { |(evt, _)| evt.to_h[:semantic] != :success }
 
     ctx[:value] = results.collect { |(evt, (ctx,_))| ctx[:value] }
     ctx[:error] = results.collect { |(evt, (ctx,_))| ctx[:error] }
@@ -27,7 +27,7 @@ module Collection
   end
 
   def self.run_instances( (ctx, flow_options), **circuit_options )
-    ctx[:results] = ctx[:value].collect { |data| ctx[:instance].decompose.first.( [{value: data}, flow_options], circuit_options.merge( exec_context: ctx[:instance].new ) ) }
+    ctx[:results] = ctx[:value].collect { |data| ctx[:instance].( [{value: data}, flow_options], circuit_options ) }
 
     return Trailblazer::Activity::Right, [ ctx, flow_options ]
   end
@@ -35,7 +35,7 @@ module Collection
   step task: method(:run_instances), id: "run_instances"
   step( {:task => method(:compute_end),
     id: "compute_end" },
-    {Output("FragmentBlank", :fragment_blank) => End(:fragment_blank, :fragment_blank)}, # not used, currently.
+    {Output("FragmentBlank", :fragment_blank) => End(:fragment_blank)}, # not used, currently.
     )
 
 end
@@ -241,7 +241,7 @@ class Item
   # property :unit_price
 
   # @needs :document
-  step( {task: DeserializeUnitPrice.decompose.first, id: "deserialize_unit_price"},
+  step( {task: DeserializeUnitPrice, id: "deserialize_unit_price"},
     DeserializeUnitPrice.outputs[:fail_fast] => :fail_fast,
     DeserializeUnitPrice.outputs[:failure] => :failure,
     DeserializeUnitPrice.outputs[:success] => :success,
@@ -381,19 +381,17 @@ end
   #   ctx[:error] : array of errors
   #   ctx[:value] : array of collected results
   describe "Collection( PriceFloat )" do
-    let(:collection) { Collection.decompose.first }
-
     it "correct collection" do
-      signal, (ctx, _) = collection.( [ { value: ["9.8", "1.2"], instance: PriceFloat } ], exec_context: Collection.new )
+      signal, (ctx, _) = Collection.( [ { value: ["9.8", "1.2"], instance: PriceFloat } ] )
 
-      signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Success}
+      assert_end Collection, signal, :success
       ctx[:value].inspect.must_equal %{[980, 120]}
     end
 
-    it "invalid collection" do
-      signal, (ctx, _) = collection.( [ { value: ["9.8", "bla"], instance: PriceFloat } ], exec_context: Collection.new )
+    it "invalid collection`" do
+      signal, (ctx, _) = Collection.( [ { value: ["9.8", "bla"], instance: PriceFloat } ] )
 
-      signal.class.inspect.must_equal %{Trailblazer::Operation::Railway::End::Failure}
+      assert_end Collection, signal, :failure
       ctx[:value].inspect.must_equal %{[980, "bla"]}
       ctx[:error].inspect.must_equal %{[nil, "\\"bla\\" is wrong format"]}
     end
