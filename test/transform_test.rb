@@ -89,6 +89,7 @@ module PriceFloat
 end
 
 module Steps
+  module_function
   # I could be an End event, no step
   def error_required(ctx, **)
     ctx[:error] = "Fragment :unit_price not found"
@@ -250,19 +251,27 @@ end
 class UnitPriceOrNestedItems
   extend Activity::FastTrack()
 
+  def self.error_required(ctx, **)
+    ctx[:error] = "Fragment :unit_price not found, and no items"
+    false
+  end
+
+  def self.set_items(ctx, value:, model:, **)
+    pp ctx
+    model.items = value
+  end
+
+
   step Parse::Hash::Step::Read.new(name: :unit_price), fail_fast: true # sucess: fragment found
-  step({task: ->((ctx, flow_options), **circuit_options) do
-    PriceFloat.( [ctx, flow_options], circuit_options )
-  end, id: "PriceFloat"},
+  step task: PriceFloat, id: "PriceFloat",
     PriceFloat.outputs[:fail_fast] => :fail_fast,
     PriceFloat.outputs[:failure] => :failure,
-    PriceFloat.outputs[:success] => :success,
-  )
-  step :set, Output(:success) => "End.success"
+    PriceFloat.outputs[:success] => :success
+  step Steps.method(:set), Output(:success) => "End.success"
 
   # this used to be implicit by placing `collection :items` after `property :unit_price`.
   step UnitPriceOrItems.method(:items_present?), magnetic_to: [:fail_fast], fail_fast: true# success===> run Collection(PriceFloat), fail==>invalid, nothing given
-  fail :error_required, magnetic_to: [:fail_fast], fail_fast: true
+  fail method(:error_required), magnetic_to: [:fail_fast], fail_fast: true
 
   # read :items
   step Parse::Hash::Step::Read.new(name: :items)
@@ -281,44 +290,31 @@ class UnitPriceOrNestedItems
     Collection.outputs[:success] => :success,
   )
 
-  def self.set_items(ctx, value:, model:, **)
-    pp ctx
-    model.items = value
-  end
   step method(:set_items)
-
-
-  include Steps
-
-  def error_required(ctx, **)
-    ctx[:error] = "Fragment :unit_price not found, and no items"
-    false
-  end
-
 end
 
   describe "UnitPriceOrNestedItems" do
-    # it "fragment not found" do
-    #   signal, (ctx, _) = activity.( [ { }, {} ], exec_context: UnitPriceOrItems.new )
+    it "fragment not found" do
+      signal, (ctx, _) = UnitPriceOrNestedItems.( [ { document: {} }, {} ] )
 
-    #   signal.to_h[:semantic].must_equal :fail_fast # FailFast signalizes "nothing found, for both paths"
-    #   ctx[:error].must_equal %{Fragment :unit_price not found, and no items}
-    # end
+      signal.to_h[:semantic].must_equal :fail_fast # FailFast signalizes "nothing found, for both paths"
+      ctx[:error].must_equal %{Fragment :unit_price not found, and no items}
+    end
 
-    # it ":unit_price given" do
-    #   signal, (ctx, _) = activity.( [ { unit_price: " 2.7  ", model: OpenStruct.new }, {} ], exec_context: UnitPriceOrItems.new )
+    it ":unit_price given" do
+      signal, (ctx, _) = UnitPriceOrNestedItems.( [ { document: {unit_price: " 2.7  "}, model: OpenStruct.new }, {} ] )
 
-    #   signal.to_h[:semantic].must_equal :success # FailFast signalizes "nothing found, for both paths"
-    #   ctx[:error].must_be_nil
-    #   ctx[:model].inspect.must_equal %{#<OpenStruct unit_price=270>}
-    # end
+      signal.to_h[:semantic].must_equal :success # FailFast signalizes "nothing found, for both paths"
+      ctx[:error].must_be_nil
+      ctx[:model].inspect.must_equal %{#<OpenStruct unit_price=270>}
+    end
 
-    # it "incorrect :unit_price" do
-    #   signal, (ctx, _) = activity.( [ { unit_price: "999" }, {} ], exec_context: UnitPriceOrItems.new )
+    it "incorrect :unit_price" do
+      signal, (ctx, _) = UnitPriceOrNestedItems.( [ {document: { unit_price: "999" }}, {} ] )
 
-    #   signal.to_h[:semantic].must_equal %{Trailblazer::Operation::Railway::End::Failure} # FailFast signalizes "nothing found, for both paths"
-    #   ctx[:error].must_equal %{"999" is wrong format}
-    # end
+      signal.to_h[:semantic].must_equal :failure # FailFast signalizes "nothing found, for both paths"
+      ctx[:error].must_equal %{"999" is wrong format}
+    end
 
     it ":items given" do
       signal, (ctx, _) = UnitPriceOrNestedItems.( [ {document: { items: [ {unit_price: "9.9"} ] }, model: OpenStruct.new }, {} ] )
