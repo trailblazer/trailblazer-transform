@@ -316,6 +316,30 @@ end
 
 puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems2.to_h[:circuit])
 
+module UnitPriceOrNestedItems3
+  extend Activity::Path()
+
+  task Parse::Hash::Step::Read.new(name: :unit_price), Output(:failure) => Path( track_color: :items_track ) do
+    task UnitPriceOrItems.method(:items_present?), Output(:failure) => :required, id: "items_present?"
+    task Parse::Hash::Step::Read.new(name: :items), Output(:failure) => :failure
+    task Collection, Output(:failure) => :failure
+    task UnitPriceOrNestedItems.method(:set_items), Output(:success) => "End.success"
+  end
+
+  task task: PriceFloat, PriceFloat.outputs[:fail_fast] => "items_present?", PriceFloat.outputs[:failure] => :failure
+  task Steps.method(:set)
+
+
+  task UnitPriceOrNestedItems.method(:error_required), magnetic_to: [:required], Output(:success) => :required
+
+  task task: End(:failure), magnetic_to: [:failure], type: :End
+  task task: End(:required), magnetic_to: [:required], type: :End
+end
+
+# it { UnitPriceOrNestedItems2.to_h[:circuit].must_equal UnitPriceOrNestedItems3.to_h[:circuit] }
+
+puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems3.to_h[:circuit])
+
   describe "UnitPriceOrNestedItems" do
     it "fragment not found" do
       signal, (ctx, _) = UnitPriceOrNestedItems.( [ { document: {} }, {} ] )
