@@ -247,6 +247,9 @@ class Item
   step method(:model)
 end
 
+
+
+
   # "custom" chainset with items that are nested, again.
 class UnitPriceOrNestedItems
   extend Activity::FastTrack()
@@ -292,6 +295,26 @@ class UnitPriceOrNestedItems
 
   step method(:set_items)
 end
+
+module UnitPriceOrNestedItems2
+  extend Activity::Path()
+
+  task Parse::Hash::Step::Read.new(name: :unit_price), Output(:failure) => :items_track
+  task task: PriceFloat, PriceFloat.outputs[:fail_fast] => :items_track, PriceFloat.outputs[:failure] => :failure
+  task Steps.method(:set)
+
+  task UnitPriceOrItems.method(:items_present?), magnetic_to: [:items_track], Output(:success) => :items_track, Output(:failure) => :required
+  task Parse::Hash::Step::Read.new(name: :items), magnetic_to: [:items_track], Output(:success) => :items_track, Output(:failure) => :failure
+  task Collection, magnetic_to: [:items_track], Output(:success) => :items_track, Output(:failure) => :failure
+  task UnitPriceOrNestedItems.method(:set_items), magnetic_to: [:items_track]
+
+  task UnitPriceOrNestedItems.method(:error_required), magnetic_to: [:required], Output(:success) => :required
+
+  task task: End(:failure), magnetic_to: [:failure], type: :End
+  task task: End(:required), magnetic_to: [:required], type: :End
+end
+
+puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems2.to_h[:circuit])
 
   describe "UnitPriceOrNestedItems" do
     it "fragment not found" do
