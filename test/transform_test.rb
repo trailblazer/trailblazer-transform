@@ -292,15 +292,21 @@ collection
 module UnitPriceOrNestedItems3
   extend Activity::Path()
 
+  module_function
+  def items_present?(ctx, document:, **)
+    return unless document.key?(:items)
+    document[:items].size > 0
+  end
+
   task Parse::Hash::Step::Read.new(name: :unit_price), Output(:failure) => Path( track_color: :items_track ) do
-    task UnitPriceOrItems.method(:items_present?), Output(:failure) => :required, id: "items_present?"
+    task UnitPriceOrNestedItems3.method(:items_present?), Output(:failure) => :required, id: "items_present?"
     task Parse::Hash::Step::Read.new(name: :items), Output(:failure) => :failure
     task Nested( Trailblazer::Transform::Process::Collection.new(activity: Item) ), Output(:failure) => :failure
-    task UnitPriceOrNestedItems.method(:set_items), Output(:success) => "End.success"
+    task Trailblazer::Transform::Process::Write.new(writer: :items=), Output(:success) => "End.success"
   end
 
   task Nested(PriceFloat), Output(:fail_fast) => "items_present?", Output(:failure) => :failure
-  task Steps.method(:set)
+  task Trailblazer::Transform::Process::Write.new(writer: :unit_price=)
 
 
   task UnitPriceOrNestedItems.method(:error_required), magnetic_to: [:required], Output(:failure) => :required
