@@ -251,10 +251,7 @@ class UnitPriceOrNestedItems
   # read :items
   step Parse::Hash::Step::Read.new(name: :items)
 
-  step task: collection=Trailblazer::Transform::Process::Collection.new(activity: Item), id: "items",
-    # Collection.outputs[:fail_fast] => :fail_fast,
-    collection.outputs[:failure] => :failure,
-    collection.outputs[:success] => :success
+  step Nested( Trailblazer::Transform::Process::Collection.new(activity: Item) ), id: "items"
 
 
   step method(:set_items)
@@ -298,7 +295,7 @@ module UnitPriceOrNestedItems3
   task Parse::Hash::Step::Read.new(name: :unit_price), Output(:failure) => Path( track_color: :items_track ) do
     task UnitPriceOrItems.method(:items_present?), Output(:failure) => :required, id: "items_present?"
     task Parse::Hash::Step::Read.new(name: :items), Output(:failure) => :failure
-    task "Collection", Output(:failure) => :failure
+    task collection=Trailblazer::Transform::Process::Collection.new(activity: Item), Output(:failure) => :failure
     task UnitPriceOrNestedItems.method(:set_items), Output(:success) => "End.success"
   end
 
