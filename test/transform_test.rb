@@ -295,15 +295,15 @@ module UnitPriceOrNestedItems3
   task Parse::Hash::Step::Read.new(name: :unit_price), Output(:failure) => Path( track_color: :items_track ) do
     task UnitPriceOrItems.method(:items_present?), Output(:failure) => :required, id: "items_present?"
     task Parse::Hash::Step::Read.new(name: :items), Output(:failure) => :failure
-    task collection=Trailblazer::Transform::Process::Collection.new(activity: Item), Output(:failure) => :failure
+    task Nested( Trailblazer::Transform::Process::Collection.new(activity: Item) ), Output(:failure) => :failure
     task UnitPriceOrNestedItems.method(:set_items), Output(:success) => "End.success"
   end
 
-  task task: PriceFloat, PriceFloat.outputs[:fail_fast] => "items_present?", PriceFloat.outputs[:failure] => :failure
+  task Nested(PriceFloat), Output(:fail_fast) => "items_present?", Output(:failure) => :failure
   task Steps.method(:set)
 
 
-  task UnitPriceOrNestedItems.method(:error_required), magnetic_to: [:required], Output(:success) => :required
+  task UnitPriceOrNestedItems.method(:error_required), magnetic_to: [:required], Output(:failure) => :required
 
   task task: End(:failure), magnetic_to: [:failure], type: :End
   task task: End(:required), magnetic_to: [:required], type: :End
@@ -315,14 +315,14 @@ puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems3.to_h[:circuit
 
   describe "UnitPriceOrNestedItems" do
     it "fragment not found" do
-      signal, (ctx, _) = UnitPriceOrNestedItems.( [ { document: {} }, {} ] )
+      signal, (ctx, _) = UnitPriceOrNestedItems3.( [ { document: {} }, {} ] )
 
-      signal.to_h[:semantic].must_equal :fail_fast # FailFast signalizes "nothing found, for both paths"
+      signal.to_h[:semantic].must_equal :required # FailFast signalizes "nothing found, for both paths"
       ctx[:error].must_equal %{Fragment :unit_price not found, and no items}
     end
 
     it ":unit_price given" do
-      signal, (ctx, _) = UnitPriceOrNestedItems.( [ { document: {unit_price: " 2.7  "}, model: OpenStruct.new }, {} ] )
+      signal, (ctx, _) = UnitPriceOrNestedItems3.( [ { document: {unit_price: " 2.7  "}, model: OpenStruct.new }, {} ] )
 
       signal.to_h[:semantic].must_equal :success # FailFast signalizes "nothing found, for both paths"
       ctx[:error].must_be_nil
@@ -330,14 +330,14 @@ puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems3.to_h[:circuit
     end
 
     it "incorrect :unit_price" do
-      signal, (ctx, _) = UnitPriceOrNestedItems.( [ {document: { unit_price: "999" }}, {} ] )
+      signal, (ctx, _) = UnitPriceOrNestedItems3.( [ {document: { unit_price: "999" }}, {} ] )
 
       signal.to_h[:semantic].must_equal :failure # FailFast signalizes "nothing found, for both paths"
       ctx[:error].must_equal %{"999" is wrong format}
     end
 
     it ":items given" do
-      signal, (ctx, _) = UnitPriceOrNestedItems.( [ {document: { items: [ {unit_price: "9.9"} ] }, model: OpenStruct.new }, {} ] )
+      signal, (ctx, _) = UnitPriceOrNestedItems3.( [ {document: { items: [ {unit_price: "9.9"} ] }, model: OpenStruct.new }, {} ] )
 
       signal.to_h[:semantic].must_equal :success # FailFast signalizes "nothing found, for both paths"
       ctx[:model].inspect.must_equal %{#<OpenStruct items=[#<struct unit_price=990>]>}
