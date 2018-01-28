@@ -33,11 +33,9 @@ module Collection
   end
 
   step task: method(:run_instances), id: "run_instances"
-  step( {:task => method(:compute_end),
-    id: "compute_end" },
-    {Output("FragmentBlank", :fragment_blank) => End(:fragment_blank)}, # not used, currently.
-    )
-
+  step task: method(:compute_end),
+    id: "compute_end" ,
+    Output("FragmentBlank", :fragment_blank) => End(:fragment_blank) # not used, currently.
 end
 
 # ::property
@@ -82,7 +80,7 @@ module PriceFloat
   fail method(:error_string), fail_fast: true # FragmentNotFound/FragmentBlank
   # step :empty?
   step method(:trim)
-  step method(:my_format)
+  step method(:my_format) # this is where Dry-v comes into play?
   fail method(:error_format)
   step method(:coerce_float)
   step method(:float_to_int) # * 100
@@ -315,6 +313,18 @@ module UnitPriceOrNestedItems2
 end
 
 puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems2.to_h[:circuit])
+
+=begin
+property
+  Read(:unit_price) (key?)
+  PriceFloat        (value.nil?)
+  set
+
+collection
+  Read(:items)      (key?)
+  Collection
+  set_items
+=end
 
 module UnitPriceOrNestedItems3
   extend Activity::Path()
