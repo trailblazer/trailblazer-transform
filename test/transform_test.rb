@@ -10,33 +10,7 @@ require "trailblazer/activity"
 
 Activity = Trailblazer::Activity
 
-# @needs :value
-# @gives :value
-module Collection
-  extend Activity::Railway()
 
-  def self.compute_end( (ctx, flow_options), ** )
-    results = ctx[:results]
-
-    was_success = !results.find { |(evt, _)| evt.to_h[:semantic] != :success }
-
-    ctx[:value] = results.collect { |(evt, (ctx,_))| ctx[:value] }
-    ctx[:error] = results.collect { |(evt, (ctx,_))| ctx[:error] }
-
-    return was_success ? Trailblazer::Activity::Right : Trailblazer::Activity::Left , [ctx, flow_options]
-  end
-
-  def self.run_instances( (ctx, flow_options), **circuit_options )
-    ctx[:results] = ctx[:value].collect { |data| ctx[:instance].( [{value: data}, flow_options], circuit_options ) }
-
-    return Trailblazer::Activity::Right, [ ctx, flow_options ]
-  end
-
-  step task: method(:run_instances), id: "run_instances"
-  step task: method(:compute_end),
-    id: "compute_end" ,
-    Output("FragmentBlank", :fragment_blank) => End(:fragment_blank) # not used, currently.
-end
 
 # ::property
 # @needs :value
@@ -382,10 +356,6 @@ puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems3.to_h[:circuit
     end
   end
 
-  def assert_end(activity, signal, semantic)
-    signal.must_equal activity.outputs[semantic].signal
-  end
-
   # PriceFloat
   #  ends:
   #   => FragmentNotFound/FragmentBlank
@@ -415,32 +385,6 @@ puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems3.to_h[:circuit
 
       assert_end PriceFloat, signal, :success
       ctx[:value].must_equal 980
-    end
-  end
-
-  # Collection
-  #  ends:
-  #   => FragmentNotFound/FragmentBlank
-  #   => End.success
-  #   => End.failure, invalid
-  #
-  #  interface
-  #   ctx[:error] : array of errors
-  #   ctx[:value] : array of collected results
-  describe "Collection( PriceFloat )" do
-    it "correct collection" do
-      signal, (ctx, _) = Collection.( [ { value: ["9.8", "1.2"], instance: PriceFloat } ] )
-
-      assert_end Collection, signal, :success
-      ctx[:value].inspect.must_equal %{[980, 120]}
-    end
-
-    it "invalid collection`" do
-      signal, (ctx, _) = Collection.( [ { value: ["9.8", "bla"], instance: PriceFloat } ] )
-
-      assert_end Collection, signal, :failure
-      ctx[:value].inspect.must_equal %{[980, "bla"]}
-      ctx[:error].inspect.must_equal %{[nil, "\\"bla\\" is wrong format"]}
     end
   end
 
