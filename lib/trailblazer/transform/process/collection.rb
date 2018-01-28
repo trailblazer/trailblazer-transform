@@ -1,5 +1,7 @@
 module Trailblazer
   module Transform::Process
+    # Iterate the dataset {ctx[:value]} and call the _instance activity_ per item.
+    # Collect results in {ctx[:value]} and {ctx[:error]}.
     class Collection
       # @param :activity The constant of the activity called per item in the dataset.
       def initialize(activity:)
