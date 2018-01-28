@@ -139,13 +139,13 @@ class UnitPriceOrItems
   fail :error_required, magnetic_to: [:fail_fast], fail_fast: true
 
   step Parse::Hash::Step::Read.new(name: :items)
-  step({task: ->((ctx, flow_options), **circuit_options) do
-    Collection.( [ctx, flow_options], circuit_options )
-  end, id: "items"},
-    # Collection.outputs[:fail_fast] => :fail_fast,
-    Collection.outputs[:failure] => :failure,
-    Collection.outputs[:success] => :success,
-  )
+  # step({task: ->((ctx, flow_options), **circuit_options) do
+  #   Collection.( [ctx, flow_options], circuit_options )
+  # end, id: "items"},
+  #   # Collection.outputs[:fail_fast] => :fail_fast,
+  #   Collection.outputs[:failure] => :failure,
+  #   Collection.outputs[:success] => :success,
+  # )
 
   step method(:set_items)
 
@@ -251,19 +251,11 @@ class UnitPriceOrNestedItems
   # read :items
   step Parse::Hash::Step::Read.new(name: :items)
 
-  step({task: ->((ctx, flow_options), **circuit_options) do
-    ctx = ctx.merge( instance: Item ) # TODO: use :input
-
-    signal, (ctx, flow_options), _ =Collection.( [ctx, flow_options], circuit_options )
-
-    ctx = ctx.merge( instance: nil ) # TODO: use :output
-
-    return signal, [ctx, flow_options]
-  end, id: "items"},
+  step task: collection=Trailblazer::Transform::Process::Collection.new(activity: Item), id: "items",
     # Collection.outputs[:fail_fast] => :fail_fast,
-    Collection.outputs[:failure] => :failure,
-    Collection.outputs[:success] => :success,
-  )
+    collection.outputs[:failure] => :failure,
+    collection.outputs[:success] => :success
+
 
   step method(:set_items)
 end
@@ -277,7 +269,7 @@ module UnitPriceOrNestedItems2
 
   task UnitPriceOrItems.method(:items_present?), magnetic_to: [:items_track], Output(:success) => :items_track, Output(:failure) => :required
   task Parse::Hash::Step::Read.new(name: :items), magnetic_to: [:items_track], Output(:success) => :items_track, Output(:failure) => :failure
-  task Collection, magnetic_to: [:items_track], Output(:success) => :items_track, Output(:failure) => :failure
+  task "Collection", magnetic_to: [:items_track], Output(:success) => :items_track, Output(:failure) => :failure
   task UnitPriceOrNestedItems.method(:set_items), magnetic_to: [:items_track]
 
   task UnitPriceOrNestedItems.method(:error_required), magnetic_to: [:required], Output(:success) => :required
@@ -306,7 +298,7 @@ module UnitPriceOrNestedItems3
   task Parse::Hash::Step::Read.new(name: :unit_price), Output(:failure) => Path( track_color: :items_track ) do
     task UnitPriceOrItems.method(:items_present?), Output(:failure) => :required, id: "items_present?"
     task Parse::Hash::Step::Read.new(name: :items), Output(:failure) => :failure
-    task Collection, Output(:failure) => :failure
+    task "Collection", Output(:failure) => :failure
     task UnitPriceOrNestedItems.method(:set_items), Output(:success) => "End.success"
   end
 

@@ -10,3 +10,5 @@ Minitest::Spec.module_eval do
     signal.must_equal activity.outputs[semantic].signal
   end
 end
+
+require "trailblazer/transform"
