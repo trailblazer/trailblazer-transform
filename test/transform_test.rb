@@ -100,13 +100,7 @@ module DeserializeUnitPrice
   step Parse::Hash::Step::Read.new(name: :unit_price) # sucess: fragment found
   fail Steps.method(:error_required), fail_fast: true # implies it wasn't sent! here, we could default
 
-  step(task: ->((ctx, flow_options), **circuit_options) do
-    PriceFloat.( [ctx, flow_options], circuit_options )
-  end, id: "PriceFloat",
-    PriceFloat.outputs[:fail_fast] => :fail_fast,
-    PriceFloat.outputs[:failure] => :failure,
-    PriceFloat.outputs[:success] => :success,
-  )
+  step Nested(PriceFloat), id: "PriceFloat"
 
   step Steps.method(:set)
 
@@ -210,11 +204,7 @@ class Item
   # property :unit_price
 
   # @needs :document
-  step( {task: DeserializeUnitPrice, id: "deserialize_unit_price"},
-    DeserializeUnitPrice.outputs[:fail_fast] => :fail_fast,
-    DeserializeUnitPrice.outputs[:failure] => :failure,
-    DeserializeUnitPrice.outputs[:success] => :success,
-  )
+  step Nested( DeserializeUnitPrice ), id: "deserialize_unit_price"
 
   step method(:model)
 end
@@ -300,9 +290,12 @@ module UnitPriceOrNestedItems3
 
   task Parse::Hash::Step::Read.new(name: :unit_price), Output(:failure) => Path( track_color: :items_track ) do
     task UnitPriceOrNestedItems3.method(:items_present?), Output(:failure) => :required, id: "items_present?"
+
+    # collection :items DeserializeItems
     task Parse::Hash::Step::Read.new(name: :items), Output(:failure) => :failure
     task Nested( Trailblazer::Transform::Process::Collection.new(activity: Item) ), Output(:failure) => :failure
     task Trailblazer::Transform::Process::Write.new(writer: :items=), Output(:success) => "End.success"
+
   end
 
   task Nested(PriceFloat), Output(:fail_fast) => "items_present?", Output(:failure) => :failure
