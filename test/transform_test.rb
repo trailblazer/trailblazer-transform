@@ -288,10 +288,11 @@ module UnitPriceOrNestedItems3
     document[:items].size > 0
   end
 
+  # property :unit_price
   task Parse::Hash::Step::Read.new(name: :unit_price), Output(:failure) => Path( track_color: :items_track ) do
     task UnitPriceOrNestedItems3.method(:items_present?), Output(:failure) => :required, id: "items_present?"
 
-    # collection :items DeserializeItems
+    # collection :items, populator:  do                         DeserializeItems
     task Parse::Hash::Step::Read.new(name: :items), Output(:failure) => :failure
     task Nested( Trailblazer::Transform::Process::Collection.new(activity: Item) ), Output(:failure) => :failure
     task Trailblazer::Transform::Process::Write.new(writer: :items=), Output(:success) => "End.success"
@@ -304,7 +305,7 @@ module UnitPriceOrNestedItems3
 
   task UnitPriceOrNestedItems.method(:error_required), magnetic_to: [:required], Output(:failure) => :required
 
-  task task: End(:failure), magnetic_to: [:failure], type: :End
+  task task: End(:failure),  magnetic_to: [:failure], type: :End
   task task: End(:required), magnetic_to: [:required], type: :End
 end
 
