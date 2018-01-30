@@ -268,12 +268,12 @@ end
 puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems2.to_h[:circuit])
 
 =begin
-property
+property :unit_price
   Read(:unit_price) (key?)
   PriceFloat        (value.nil?)
   set
 
-collection
+collection :items
   Read(:items)      (key?)
   Collection
   set_items
