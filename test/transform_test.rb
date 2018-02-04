@@ -100,7 +100,7 @@ module DeserializeUnitPrice
   step Parse::Hash::Step::Read.new(name: :unit_price) # sucess: fragment found
   fail Steps.method(:error_required), fail_fast: true # implies it wasn't sent! here, we could default
 
-  step Nested(PriceFloat), id: "PriceFloat"
+  step Subprocess(PriceFloat), id: "PriceFloat"
 
   step Steps.method(:set)
 
@@ -204,7 +204,7 @@ class Item
   # property :unit_price
 
   # @needs :document
-  step Nested( DeserializeUnitPrice ), id: "deserialize_unit_price"
+  step Subprocess( DeserializeUnitPrice ), id: "deserialize_unit_price"
 
   step method(:model)
 end
@@ -241,7 +241,7 @@ class UnitPriceOrNestedItems
   # read :items
   step Parse::Hash::Step::Read.new(name: :items)
 
-  step Nested( Trailblazer::Transform::Process::Collection.new(activity: Item) ), id: "items"
+  step Subprocess( Trailblazer::Transform::Process::Collection.new(activity: Item) ), id: "items"
 
 
   step method(:set_items)
@@ -250,13 +250,13 @@ end
 module UnitPriceOrNestedItems2
   extend Activity::Path()
 
-  task Parse::Hash::Step::Read.new(name: :unit_price), Output(:failure) => :items_track
+  task Parse::Hash::Step::Read.new(name: :unit_price), Output(Trailblazer::Activity::Left, :failure) => :items_track
   task task: PriceFloat, PriceFloat.outputs[:fail_fast] => :items_track, PriceFloat.outputs[:failure] => :failure
   task Steps.method(:set)
 
-  task UnitPriceOrItems.method(:items_present?), magnetic_to: [:items_track], Output(:success) => :items_track, Output(:failure) => :required
-  task Parse::Hash::Step::Read.new(name: :items), magnetic_to: [:items_track], Output(:success) => :items_track, Output(:failure) => :failure
-  task "Collection", magnetic_to: [:items_track], Output(:success) => :items_track, Output(:failure) => :failure
+  task UnitPriceOrItems.method(:items_present?), magnetic_to: [:items_track], Output(:success) => :items_track, Output(Trailblazer::Activity::Left, :failure) => :required
+  task Parse::Hash::Step::Read.new(name: :items), magnetic_to: [:items_track], Output(:success) => :items_track, Output(Trailblazer::Activity::Left, :failure) => :failure
+  task "Collection", magnetic_to: [:items_track], Output(:success) => :items_track, Output(Trailblazer::Activity::Left, :failure) => :failure
   task UnitPriceOrNestedItems.method(:set_items), magnetic_to: [:items_track]
 
   task UnitPriceOrNestedItems.method(:error_required), magnetic_to: [:required], Output(:success) => :required
@@ -289,21 +289,21 @@ module UnitPriceOrNestedItems3
   end
 
   # property :unit_price
-  task Parse::Hash::Step::Read.new(name: :unit_price), Output(:failure) => Path( track_color: :items_track ) do
-    task UnitPriceOrNestedItems3.method(:items_present?), Output(:failure) => :required, id: "items_present?"
+  task Parse::Hash::Step::Read.new(name: :unit_price), Output(Trailblazer::Activity::Left, :failure) => Path( track_color: :items_track ) do
+    task UnitPriceOrNestedItems3.method(:items_present?), Output(Trailblazer::Activity::Left, :failure) => :required, id: "items_present?"
 
     # collection :items, populator:  do                         DeserializeItems
-    task Parse::Hash::Step::Read.new(name: :items), Output(:failure) => :failure
-    task Nested( Trailblazer::Transform::Process::Collection.new(activity: Item) ), Output(:failure) => :failure
+    task Parse::Hash::Step::Read.new(name: :items), Output(Trailblazer::Activity::Left, :failure) => :failure
+    task Subprocess( Trailblazer::Transform::Process::Collection.new(activity: Item) ), Output(Trailblazer::Activity::Left, :failure) => :failure
     task Trailblazer::Transform::Process::Write.new(writer: :items=), Output(:success) => "End.success"
 
   end
 
-  task Nested(PriceFloat), Output(:fail_fast) => "items_present?", Output(:failure) => :failure
+  task Subprocess(PriceFloat), Output(:fail_fast) => "items_present?", Output(:failure) => :failure
   task Trailblazer::Transform::Process::Write.new(writer: :unit_price=)
 
 
-  task UnitPriceOrNestedItems.method(:error_required), magnetic_to: [:required], Output(:failure) => :required
+  task UnitPriceOrNestedItems.method(:error_required), magnetic_to: [:required], Output(Trailblazer::Activity::Left, :failure) => :required
 
   task task: End(:failure),  magnetic_to: [:failure], type: :End
   task task: End(:required), magnetic_to: [:required], type: :End
