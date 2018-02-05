@@ -330,9 +330,9 @@ module UnitPriceOrNestedItems4
 
   task Subprocess( PropertyUnitPrice ) # success/failure/required
 
-  task UnitPriceOrNestedItems3.method(:items_present?), Output(Trailblazer::Activity::Left, :failure) => :required, magnetic_to: [:required]
+  task UnitPriceOrNestedItems3.method(:items_present?), Output(Trailblazer::Activity::Left, :failure) => :required, magnetic_to: [:required], Output(:success)=>"collection_items"
 
-  task Subprocess( CollectionItems ), magnetic_to: [:required]
+  task Subprocess( CollectionItems ), id: "collection_items", magnetic_to: []
 
   task task: End(:failure),  magnetic_to: [:failure], type: :End
   task task: End(:required), magnetic_to: [:required], type: :End
@@ -344,7 +344,9 @@ puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems4.to_h[:circuit
 
   describe "UnitPriceOrNestedItems" do
     it "fragment not found" do
-      signal, (ctx, _) = UnitPriceOrNestedItems4.( [ { document: {} }, {} ] )
+      stack, signal, (ctx, _) =  Activity::Trace.(UnitPriceOrNestedItems4, [ { document: {} }, {} ] )
+
+      puts Trailblazer::Activity::Trace::Present.tree(stack)
 
       signal.to_h[:semantic].must_equal :required # FailFast signalizes "nothing found, for both paths"
       ctx[:error].must_equal %{Fragment :unit_price not found, and no items}
