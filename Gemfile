@@ -6,6 +6,6 @@ git_source(:github) {|repo_name| "https://github.com/#{repo_name}" }
 gemspec
 
 # gem "trailblazer-operation"#, path: "../operation"
-gem "trailblazer-activity"#, path: "../trailblazer-circuit"
+gem "trailblazer-activity", path: "../trailblazer-activity"
 
 gem "minitest-line"

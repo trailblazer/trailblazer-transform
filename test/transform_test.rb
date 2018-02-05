@@ -332,7 +332,7 @@ module UnitPriceOrNestedItems4
 
   task UnitPriceOrNestedItems3.method(:items_present?), Output(Trailblazer::Activity::Left, :failure) => :required, magnetic_to: [:required]
 
-  task Subprocess( CollectionItems )#, magnetic_to: [:required]
+  task Subprocess( CollectionItems ), magnetic_to: [:required]
 
   task task: End(:failure),  magnetic_to: [:failure], type: :End
   task task: End(:required), magnetic_to: [:required], type: :End
@@ -351,7 +351,10 @@ puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems4.to_h[:circuit
     end
 
     it ":unit_price given" do
-      signal, (ctx, _) = UnitPriceOrNestedItems4.( [ { document: {unit_price: " 2.7  "}, model: OpenStruct.new }, {} ] )
+      # signal, (ctx, _) = UnitPriceOrNestedItems4.( [ { document: {unit_price: " 2.7  "}, model: OpenStruct.new }, {} ] )
+      stack, signal, (ctx, _) = Activity::Trace.( UnitPriceOrNestedItems4,  [ { document: {unit_price: " 2.7  "}, model: OpenStruct.new }, {} ] )
+
+      puts Trailblazer::Activity::Trace::Present.tree(stack)
 
       signal.to_h[:semantic].must_equal :success # FailFast signalizes "nothing found, for both paths"
       ctx[:error].must_be_nil
