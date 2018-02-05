@@ -13,7 +13,7 @@ class SchemaTest < Minitest::Spec
     end
 
     property :unit_price
-    collection :items, _activity: ->(original) { snippet },  do
+    collection :items, _activity: ->(original) { task original, magnetic_to: [:req] }  do
       property :price_gross
       property :vat_percentage
     end
