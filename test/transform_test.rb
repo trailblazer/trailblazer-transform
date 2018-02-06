@@ -340,6 +340,19 @@ module UnitPriceOrNestedItems4
   task task: End(:required), magnetic_to: [:required], type: :End
 end
 
+
+module TT
+
+end
+
+module UnitPriceorNestedItems5
+  extend TT
+  extend Activity::Path()
+
+  property :unit_price, bla: PriceFloat
+  collection :items,    bla: Item,      override: ->(items, *) { task task: items, magnetic_to: [:required] }
+end
+
 # it { UnitPriceOrNestedItems2.to_h[:circuit].must_equal UnitPriceOrNestedItems3.to_h[:circuit] }
 
 puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems4.to_h[:circuit])
