@@ -332,9 +332,9 @@ module UnitPriceOrNestedItems4
 
   task Subprocess( PropertyUnitPrice ) # success/failure/required
 
-  task UnitPriceOrNestedItems3.method(:items_present?), Output(Trailblazer::Activity::Left, :failure) => :required, magnetic_to: [:required], Output(:success)=>"collection_items"
+  task Subprocess( CollectionItems ), id: "collection_items", magnetic_to: [:required]
+  # task UnitPriceOrNestedItems3.method(:items_present?), Output(Trailblazer::Activity::Left, :failure) => :required, magnetic_to: [:required], Output(:success)=>"collection_items"
 
-  task Subprocess( CollectionItems ), id: "collection_items", magnetic_to: []
 
   task task: End(:failure),  magnetic_to: [:failure], type: :End
   task task: End(:required), magnetic_to: [:required], type: :End
