@@ -1,7 +1,7 @@
 module Trailblazer
   module Transform::Parse
     module Hash
-      module Step
+      module Step # discuss: WHY STEP?
         module_function
 
         class Read

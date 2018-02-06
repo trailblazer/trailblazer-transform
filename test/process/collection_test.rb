@@ -47,5 +47,15 @@ class ProcessCollectionTest < Minitest::Spec
       ctx[:value].inspect.must_equal %{[27, "bla"]}
       ctx[:error].inspect.must_equal %{[nil, "\\"bla\\" is wrong format"]}
     end
+
+    # describe "Parse -> Collection( PriceFloat )" do
+    #   let(:collection) do
+    #     Module.new do
+    #       extend Trailblazer::Activity::Railway()
+
+    #       step Trailblazer::Transform::Parse::Hash::Step::Read.new(:items)
+    #       Trailblazer::Transform::Process::Collection.new( activity: instance ) ) }
+    #     end
+    # end
   end
 end

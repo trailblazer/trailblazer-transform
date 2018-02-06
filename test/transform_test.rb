@@ -310,6 +310,7 @@ module UnitPriceOrNestedItems3
 end
 
 module UnitPriceOrNestedItems4
+  # End: success/failure/required
   module PropertyUnitPrice
     extend Activity::Railway()
 
@@ -318,12 +319,13 @@ module UnitPriceOrNestedItems4
     step Trailblazer::Transform::Process::Write.new(writer: :unit_price=)
   end
 
+  # End: success/failure/required
   module CollectionItems
     extend Activity::Railway()
 
-    step Parse::Hash::Step::Read.new(name: :items), Output(:failure) => :failure
-    step Subprocess( Trailblazer::Transform::Process::Collection.new(activity: Item) ), Output(:failure) => :failure
-    step Trailblazer::Transform::Process::Write.new(writer: :items=), Output(:success) => "End.success"
+    step Parse::Hash::Step::Read.new(name: :items),      Output(:failure) => End(:required)
+    step Subprocess( Trailblazer::Transform::Process::Collection.new(activity: Item) )
+    step Trailblazer::Transform::Process::Write.new(writer: :items=)
   end
 
   extend Activity::Path()
