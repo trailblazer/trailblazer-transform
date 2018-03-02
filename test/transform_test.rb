@@ -122,9 +122,9 @@ class UnitPriceOrItems
 
   step Parse::Hash::Step::Read.new(name: :unit_price), fail_fast: true # sucess: fragment found
   step task: PriceFloat, id: "PriceFloat",
-    PriceFloat.outputs[:fail_fast] => :fail_fast,
-    PriceFloat.outputs[:failure] => :failure,
-    PriceFloat.outputs[:success] => :success
+    PriceFloat.outputs[:fail_fast] => Track(:fail_fast),
+    PriceFloat.outputs[:failure] => Track(:failure),
+    PriceFloat.outputs[:success] => Track(:success)
 
   step Steps.method(:set), Output(:success) => "End.success"
 
@@ -136,9 +136,9 @@ class UnitPriceOrItems
   # step({task: ->((ctx, flow_options), **circuit_options) do
   #   Collection.( [ctx, flow_options], circuit_options )
   # end, id: "items"},
-  #   # Collection.outputs[:fail_fast] => :fail_fast,
-  #   Collection.outputs[:failure] => :failure,
-  #   Collection.outputs[:success] => :success,
+  #   # Collection.outputs[:fail_fast] => Track(:fail_fast),
+  #   Collection.outputs[:failure] => Track(:failure),
+  #   Collection.outputs[:success] => Track(:success),
   # )
 
   step method(:set_items)
@@ -229,9 +229,9 @@ class UnitPriceOrNestedItems
 
   step Parse::Hash::Step::Read.new(name: :unit_price), fail_fast: true # sucess: fragment found
   step task: PriceFloat, id: "PriceFloat",
-    PriceFloat.outputs[:fail_fast] => :fail_fast,
-    PriceFloat.outputs[:failure] => :failure,
-    PriceFloat.outputs[:success] => :success
+    PriceFloat.outputs[:fail_fast] => Track(:fail_fast),
+    PriceFloat.outputs[:failure] => Track(:failure),
+    PriceFloat.outputs[:success] => Track(:success)
   step Steps.method(:set), Output(:success) => "End.success"
 
   # this used to be implicit by placing `collection :items` after `property :unit_price`.
@@ -250,16 +250,16 @@ end
 module UnitPriceOrNestedItems2
   extend Activity::Path()
 
-  task Parse::Hash::Step::Read.new(name: :unit_price), Output(Trailblazer::Activity::Left, :failure) => :items_track
-  task task: PriceFloat, PriceFloat.outputs[:fail_fast] => :items_track, PriceFloat.outputs[:failure] => :failure
+  task Parse::Hash::Step::Read.new(name: :unit_price), Output(Trailblazer::Activity::Left, :failure) => Track(:items_track)
+  task task: PriceFloat, PriceFloat.outputs[:fail_fast] => Track(:items_track), PriceFloat.outputs[:failure] => Track(:failure)
   task Steps.method(:set)
 
-  task UnitPriceOrItems.method(:items_present?), magnetic_to: [:items_track], Output(:success) => :items_track, Output(Trailblazer::Activity::Left, :failure) => :required
-  task Parse::Hash::Step::Read.new(name: :items), magnetic_to: [:items_track], Output(:success) => :items_track, Output(Trailblazer::Activity::Left, :failure) => :failure
-  task "Collection", magnetic_to: [:items_track], Output(:success) => :items_track, Output(Trailblazer::Activity::Left, :failure) => :failure
+  task UnitPriceOrItems.method(:items_present?), magnetic_to: [:items_track], Output(:success) => Track(:items_track), Output(Trailblazer::Activity::Left, :failure) => Track(:required)
+  task Parse::Hash::Step::Read.new(name: :items), magnetic_to: [:items_track], Output(:success) => Track(:items_track), Output(Trailblazer::Activity::Left, :failure) => Track(:failure)
+  task "Collection", magnetic_to: [:items_track], Output(:success) => Track(:items_track), Output(Trailblazer::Activity::Left, :failure) => Track(:failure)
   task UnitPriceOrNestedItems.method(:set_items), magnetic_to: [:items_track]
 
-  task UnitPriceOrNestedItems.method(:error_required), magnetic_to: [:required], Output(:success) => :required
+  task UnitPriceOrNestedItems.method(:error_required), magnetic_to: [:required], Output(:success) => Track(:required)
 
   task task: End(:failure), magnetic_to: [:failure], type: :End
   task task: End(:required), magnetic_to: [:required], type: :End
@@ -290,20 +290,20 @@ module UnitPriceOrNestedItems3
 
   # property :unit_price
   task Parse::Hash::Step::Read.new(name: :unit_price), Output(Trailblazer::Activity::Left, :failure) => Path( track_color: :items_track ) do
-    task UnitPriceOrNestedItems3.method(:items_present?), Output(Trailblazer::Activity::Left, :failure) => :required, id: "items_present?"
+    task UnitPriceOrNestedItems3.method(:items_present?), Output(Trailblazer::Activity::Left, :failure) => Track(:required), id: "items_present?"
 
     # collection :items, populator:  do                         DeserializeItems
-    task Parse::Hash::Step::Read.new(name: :items), Output(Trailblazer::Activity::Left, :failure) => :failure
-    task Subprocess( Trailblazer::Transform::Process::Collection.new(activity: Item) ), Output(Trailblazer::Activity::Left, :failure) => :failure
+    task Parse::Hash::Step::Read.new(name: :items), Output(Trailblazer::Activity::Left, :failure) => Track(:failure)
+    task Subprocess( Trailblazer::Transform::Process::Collection.new(activity: Item) ), Output(Trailblazer::Activity::Left, :failure) => Track(:failure)
     task Trailblazer::Transform::Process::Write.new(writer: :items=), Output(:success) => "End.success"
 
   end
 
-  task Subprocess(PriceFloat), Output(:fail_fast) => "items_present?", Output(:failure) => :failure
+  task Subprocess(PriceFloat), Output(:fail_fast) => "items_present?", Output(:failure) => Track(:failure)
   task Trailblazer::Transform::Process::Write.new(writer: :unit_price=)
 
 
-  task UnitPriceOrNestedItems.method(:error_required), magnetic_to: [:required], Output(Trailblazer::Activity::Left, :failure) => :required
+  task UnitPriceOrNestedItems.method(:error_required), magnetic_to: [:required], Output(Trailblazer::Activity::Left, :failure) => Track(:required)
 
   task task: End(:failure),  magnetic_to: [:failure], type: :End
   task task: End(:required), magnetic_to: [:required], type: :End
@@ -333,7 +333,7 @@ module UnitPriceOrNestedItems4
   task Subprocess( PropertyUnitPrice ) # success/failure/required
 
   task Subprocess( CollectionItems ), id: "collection_items", magnetic_to: [:required]
-  # task UnitPriceOrNestedItems3.method(:items_present?), Output(Trailblazer::Activity::Left, :failure) => :required, magnetic_to: [:required], Output(:success)=>"collection_items"
+  # task UnitPriceOrNestedItems3.method(:items_present?), Output(Trailblazer::Activity::Left, :failure) => Track(:required), magnetic_to: [:required], Output(:success)=>"collection_items"
 
 
   task task: End(:failure),  magnetic_to: [:failure], type: :End
@@ -375,8 +375,8 @@ module UnitPriceOrNestedItems5
   property :unit_price, processor: PriceFloat
   collection :items,    item_processor: Item,      override: ->(items, *) { task Subprocess(items), magnetic_to: [:required] }
 
-  task task: End(:failure),  magnetic_to: [:failure], type: :End
-  task task: End(:required), magnetic_to: [:required], type: :End
+  _end task: End(:failure),  magnetic_to: [:failure]
+  _end task: End(:required), magnetic_to: [:required]
 end
 
 # it { UnitPriceOrNestedItems2.to_h[:circuit].must_equal UnitPriceOrNestedItems3.to_h[:circuit] }
