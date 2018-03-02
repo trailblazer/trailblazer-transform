@@ -9,12 +9,12 @@ module Trailblazer
       end
 
       def outputs
-        Workflow.outputs # FIXME: can't we use Subprocess here?
+        Flow.outputs # FIXME: can't we use Subprocess here?
       end
       # TODO: extend Interface
 
       def call( args, circuit_options )
-        Workflow.( args, circuit_options.merge( activity: @activity) )
+        Flow.( args, circuit_options.merge( activity: @activity) )
       end
 
       def self.run_instances( (ctx, flow_options), activity:, **circuit_options )
@@ -36,7 +36,7 @@ module Trailblazer
 
       # @needs :value
       # @gives :value
-      module Workflow
+      module Flow
         extend Activity::Railway()
 
         step task: Collection.method(:run_instances), id: "run_instances"
