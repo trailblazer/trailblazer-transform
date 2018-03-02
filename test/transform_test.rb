@@ -342,17 +342,22 @@ end
 
 
 module TT
+  # Create an activity to read, process and write a scalar property.
+  #
+  # [Read] -> [your process] -> [Write] -> End(:success)
+  #   |             |--------------------> End(:failure)
+  #   |
+  #   -----------------------------------> End(:required)
   def property(name, processor:, **options)
-    # End: success/failure/required
-    property_module = Module.new do
+    activity = Module.new do
       extend Activity::Railway(name: name)
 
       step Parse::Hash::Step::Read.new(name: name), Output(:failure) => End(:required)
       step Subprocess(processor)#, Output(:fail_fast) => "required"
-      step Trailblazer::Transform::Process::Write.new(writer: "#{name}=")
+      pass Trailblazer::Transform::Process::Write.new(writer: "#{name}=")
     end
 
-    insert(name, processor: property_module, **options)
+    insert(name, processor: activity, **options)
   end
 
   def collection(name, item_processor:, **options)
