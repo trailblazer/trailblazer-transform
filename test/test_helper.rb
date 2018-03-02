@@ -9,6 +9,8 @@ Minitest::Spec.module_eval do
   def assert_end(activity, signal, semantic)
     signal.must_equal activity.outputs[semantic].signal
   end
+
+  Transform = Trailblazer::Transform
 end
 
 require "trailblazer/transform"

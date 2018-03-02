@@ -341,44 +341,22 @@ module UnitPriceOrNestedItems4
 end
 
 
-module TT
-  # Create an activity to read, process and write a scalar property.
-  #
-  # [Read] -> [your process] -> [Write] -> End(:success)
-  #   |             |--------------------> End(:failure)
-  #   |
-  #   -----------------------------------> End(:required)
-  def property(name, processor:, **options)
-    activity = Module.new do
-      extend Activity::Railway(name: name)
-
-      step Parse::Hash::Step::Read.new(name: name), Output(:failure) => End(:required)
-      step Subprocess(processor)#, Output(:fail_fast) => "required"
-      pass Trailblazer::Transform::Process::Write.new(writer: "#{name}=")
-    end
-
-    insert(name, processor: activity, **options)
-  end
-
-  def collection(name, item_processor:, **options)
-    processor = Trailblazer::Transform::Process::Collection.new(activity: item_processor)
-
-    property(name, processor: processor, **options)
-  end
-
-  private def insert(name, processor:, override: nil, **options)
-    return instance_exec(processor, &override) if override
-
-    task Subprocess( processor )
-  end
-end
-
 module UnitPriceOrNestedItems5
-  extend TT
+  extend Transform::Schema
   extend Activity::Path()
 
+  # [:unit_price] ------------------------------> End(:success)
+  #   |     |                                     ^
+  #   |     |-------> [:items] -------------------|
+  #                     |   |
+  #                     |   |-------------------> End(:required)
+  #   |                 |
+  #   |-----------------+-----------------------> End(:failure)
+
   property :unit_price, processor: PriceFloat
-  collection :items,    item_processor: Item,      override: ->(items, *) { task Subprocess(items), magnetic_to: [:required] }
+  collection :items,    item_processor: Item,
+    # we don't like the wiring of the [collection] task, so let's override:
+    override: ->(items, *) { task Subprocess(items), magnetic_to: [:required] }
 
   _end task: End(:failure),  magnetic_to: [:failure]
   _end task: End(:required), magnetic_to: [:required]
