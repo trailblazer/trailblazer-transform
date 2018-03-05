@@ -24,13 +24,64 @@ module Trailblazer::Transform
 end
 
 class FlowTest < Minitest::Spec
+  # @needs :value
   module Amount
-    extend Trailblazer::Activity::Path()
+    extend Trailblazer::Activity::Railway()
+    module_function
 
-    pass ->(ctx, value:, **) { ctx[:value] = "Amount: #{value}" }
+    def error_string(ctx, value:, **)
+      ctx[:error] = "#{value.inspect} is blank string"
+    end
+    def error_format(ctx, value:, **)
+      ctx[:error] = "#{value.inspect} is wrong format"
+    end
 
-    _end task: End(:required)#, magnetic_to: [:required]
-    _end task: End(:failure)#, magnetic_to: [:required]
+    def filled?(ctx, value:, **)
+      ! value.nil?
+    end
+    # TODO: use dry-types here
+    def coerce_string(ctx, value:, **)
+      value.to_s
+    end
+
+    def trim(ctx, value:, **)
+      ctx[:value] = value.strip
+    end
+
+    require "dry/validation"
+
+    def my_format(ctx, value:, **)
+      schema = Dry::Validation.Schema do
+        required(:value).filled( format?: /^\d\.\d$/ )
+      end
+
+      result = schema.( value: value )
+
+      ctx[:schema_result] = result
+
+      result.success?
+    end
+
+    def coerce_float(ctx, value:, **)
+      ctx[:value] = value.to_f
+    end
+
+    def float_to_int(ctx, value:, **)
+      ctx[:value] = (value * 100).to_i
+    end
+
+    step method(:filled?)
+    fail method(:error_string), Output(:failure) => "End.required" # FragmentNotFound/FragmentBlank
+
+    step method(:coerce_string) # success: is string, fail: is nil
+    # step :empty?
+    step method(:trim)
+    step method(:my_format) # this is where Dry-v comes into play?
+    fail method(:error_format)
+    step method(:coerce_float)
+    step method(:float_to_int) # * 100
+
+    _end task: End(:required), id: "End.required", magnetic_to: [:required]
   end
 
   module InvoiceDate
@@ -47,4 +98,22 @@ class FlowTest < Minitest::Spec
   end
 
   pp Expense.activity.to_h[:circuit]
+
+  it "wrong {amount}" do
+    read_data        = Struct.new(:amount, :invoice_date).new # raw parsed data.
+    signal, (ctx, _) = Expense.activity.( [{ document: { amount: "  34.sd" }, read_data: read_data }, {}] )
+
+    pp ctx
+  end
+
+  it "correct {amount}, missing {invoice_date}" do
+    model_from_populator = Struct.new(:amount, :invoice_date).new # i want well-formatted, typed data, only!
+    read_data            = Struct.new(:amount, :invoice_date).new # raw parsed data.
+
+    signal, (ctx, _) = Expense.activity.( [{ document: { amount: "  3.0" }, model: model_from_populator, read_data: read_data }, {}] )
+
+    # outer_model.invoice = model_from_populator
+
+    pp ctx
+  end
 end

@@ -21,7 +21,8 @@ module Trailblazer
         flow = Module.new do
           extend Activity::Railway(name: name)
 
-          step Parse::Hash::Step::Read.new(name: name), Output(:failure) => End(:required)
+          step Parse::Hash::Step::Read.new(name: name), Output(:failure) => End(:required) # writes fragment to :{value}.
+        pass Schema.method(:write_parsed)
           step Subprocess(processor)#, Output(:fail_fast) => "required"
           pass Transform::Process::Write.new(writer: "#{name}=")
         end
@@ -49,3 +50,35 @@ module Trailblazer
     end
   end
 end
+
+entity <expense>
+  read # simply grab document
+  process
+  write # simply return
+
+
+binding <price>
+  scalar <price>
+    read from { ..., price: 1 }
+    process # coerce, validate
+    return fragment, value
+
+  model.price = value
+  read.price = fragment # original data
+  err.price = nil
+
+
+binding <items>
+  read from { items: [ .. ] }
+  collection # collection logic wants to reuse as much scalar logic as possible.
+
+    scalar <price>
+      read from { ..., price: 1 }
+      process # coerce, validate
+      return fragment, value
+
+
+
+  model.items = value
+  read.items = fragment # original data
+  err.items = nil
