@@ -51,31 +51,48 @@ module Trailblazer
   end
 end
 
+write
+  model.price = value
+  read.price = fragment # original data
+  err.price = nil
+
 entity <expense>
   read # simply grab document
   process
   write # simply return
 
 
-binding <price>
-  scalar <price>
-    read from { ..., price: 1 }
-    process # coerce, validate
-    return fragment, value
+# entity == "nested property"
 
-  model.price = value
-  read.price = fragment # original data
-  err.price = nil
+scalar <price>
+  read from { price: { ... } } #=> fragment
+  entity <price> # maintains values.amount, values.currency, errors.amount etc., original_values.amount, the "aggregate" ==> build the aggregate=populator
+    scalar <amount> # don't write anything anywhere (value object, property)
+      read from { ..., amount: 1 }
+      process # coerce, validate
+      return fragment, processed_value, error
+    write #to the "entity aggregate"
+
+    scalar <currency>
+      read from { ..., currency: :EUR }
+      process # coerce, validate
+      return fragment, processed_value, error
+    write
+
+    return processed_value <price entity>, errors <price entity.errors>
+  write # to invoice entity
+
 
 
 binding <items>
   read from { items: [ .. ] }
   collection # collection logic wants to reuse as much scalar logic as possible.
 
-    scalar <price>
+    scalar <price> # don't write anything anywhere (value object, property)
       read from { ..., price: 1 }
       process # coerce, validate
-      return fragment, value
+      return fragment, processed_value, error
+
 
 
 
