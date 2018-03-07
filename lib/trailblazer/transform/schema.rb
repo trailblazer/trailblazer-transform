@@ -18,14 +18,7 @@ module Trailblazer
       # If the placement/wiring of automatically provided {activity} doesn't suit you,
       # use {:override}. # TODO, MORE DOCS.
       def property(activity, name, processor:, **options)
-        flow = Module.new do
-          extend Activity::Railway(name: name)
-
-          step Parse::Hash::Step::Read.new(name: name), Output(:failure) => End(:required) # writes fragment to :{value}.
-        pass Schema.method(:write_parsed)
-          step Subprocess(processor)#, Output(:fail_fast) => "required"
-          pass Transform::Process::Write.new(writer: "#{name}=")
-        end
+        flow = Scalar(name, processor: processor)
 
         insert(activity, name, processor: flow, **options)
       end
@@ -34,6 +27,44 @@ module Trailblazer
         processor = Transform::Process::Collection.new(activity: item_processor)
 
         property(activity, name, processor: processor, **options)
+      end
+
+      require "trailblazer/context"
+      def Scalar(name, processor:, **options)
+         flow = Module.new do
+          extend Activity::Railway(name: name)
+
+          step task: -> ((ctx, flow_options), circuit_options) do
+puts "X#{name} @@@@@ #{ctx.inspect}"
+
+            new_ctx = Trailblazer::Context(ctx)
+            new_ctx[:document] = ctx[:value]
+
+            [ Trailblazer::Activity::Right, [new_ctx, flow_options], circuit_options ]
+          end
+
+
+
+          step Parse::Hash::Step::Read.new(name: name), Output(:failure) => End(:required) # writes fragment to :{value}.
+          step ->(ctx, value:, **) { ctx[:read_fragment] = value; puts "@@@@@ #{value.inspect}";true }
+        # pass Schema.method(:write_parsed)
+
+          pass Subprocess(processor), Output(:success) => Track(:success)#, Output(:fail_fast) => "required"
+          # pass Transform::Process::Write.new(writer: "#{name}=")
+
+
+
+
+          pass task: ->((new_ctx, flow_options), circuit_options) do
+
+              ctx, scalar_values = new_ctx.decompose
+
+              ctx[name] = scalar_values
+puts "XXX#{name} @@@@@ #{ctx.inspect}"
+
+            [ Trailblazer::Activity::Right, [ctx, flow_options], circuit_options ]
+          end
+        end
       end
 
       # private
@@ -51,6 +82,7 @@ module Trailblazer
   end
 end
 
+=begin
 write
   model.price = value
   read.price = fragment # original data
@@ -64,20 +96,21 @@ entity <expense>
 
 # entity == "nested property"
 
-scalar <price>
-  read from { price: { ... } } #=> fragment
-  entity <price> # maintains values.amount, values.currency, errors.amount etc., original_values.amount, the "aggregate" ==> build the aggregate=populator
-    scalar <amount> # don't write anything anywhere (value object, property)
-      read from { ..., amount: 1 }
-      process # coerce, validate
-      return fragment, processed_value, error
-    write #to the "entity aggregate"
+entity <invoice> # builds values, errors, (fragments) "populator"
+  scalar <price>
+    read from { price: { ... } } #=> fragment
+    entity <price> # maintains values.amount, values.currency, errors.amount etc., original_values.amount, the "aggregate" ==> build the aggregate=populator
+      scalar <amount> # don't write anything anywhere (value object, property)
+        read from { ..., amount: 1 }
+        process # coerce, validate
+        return fragment, processed_value, error
+      write #to the price "entity aggregate"
 
-    scalar <currency>
-      read from { ..., currency: :EUR }
-      process # coerce, validate
-      return fragment, processed_value, error
-    write
+      scalar <currency>
+        read from { ..., currency: :EUR }
+        process # coerce, validate
+        return fragment, processed_value, error
+      write
 
     return processed_value <price entity>, errors <price entity.errors>
   write # to invoice entity
@@ -99,3 +132,4 @@ binding <items>
   model.items = value
   read.items = fragment # original data
   err.items = nil
+=end
