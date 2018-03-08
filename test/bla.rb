@@ -26,7 +26,8 @@ class BlaTest < Minitest::Spec
   # price_scalar = Transform::Schema.Scalar(:price, processor: entity)
 
 
-  items_scalar = Transform::Schema.Scalar(:items, processor: Transform::Process::Collection.new(activity: FlowTest::Amount) )
+  amounts_scalar = Transform::Schema.Scalar(:amounts, processor: Transform::Process::Collection.new(activity: FlowTest::Amount) )
+  figures_scalar = Transform::Schema.Scalar(:figures, processor: Transform::Process::Collection.new(activity: price_entity) )
 
   # the "real" invoice
   invoice_entity = Module.new do
@@ -34,11 +35,15 @@ class BlaTest < Minitest::Spec
 
     pass Subprocess( price_scalar )
     pass Subprocess( currency )
-    pass Subprocess( items_scalar )
+    pass Subprocess( amounts_scalar )
+    pass Subprocess( figures_scalar )
   end
 
   pp invoice_entity.( {value: { price:{ amount: "9.1", currency: "1.2" }, currency: "8.1",
-    items: ["1.1", "2.1"] }} )
+    amounts: ["1.1", "2.1"],
+    figures: [ { amount: "3.4", currency: "5.6" }, { amount: "9.1", currency: "7.8" }  ]
+     }}
+  )
 raise
 
 
