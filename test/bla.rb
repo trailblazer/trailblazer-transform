@@ -3,43 +3,7 @@ require_relative "flow_test"
 
 module Trailblazer::Transform
   class Entity # aggregate
-    def initialize(properties)
-      @properties = properties
-    end
-
-    # def call(fragment, form = { parsed_fragments:{}, values:{}, messages:{} }) # is this the "populator"?
-    def call( (ctx, _), *) # is this the "populator"?
-      fragment = ctx[:fragment]
-      form     = { parsed_fragments:{}, values:{}, messages:{} } # "form" object
-
-
-      @properties.each do |scalar|
-        # scalar <amount>
-        signal, (ctx, _) = scalar.( document: fragment )
-
-        parsed_fragments, value, message = ctx[:read_fragment], ctx[:value], ctx[:schema_result]
-
-
-
-        # write
-        #
-        # das ding merget sich in einen hash, kennt aber nicht seinen key
-        form = form.merge(
-          parsed_fragments: form[:parsed_fragments].merge( scalar => parsed_fragments ),
-          values:           form[:values].merge( scalar => value ),
-          messages:         form[:messages].merge( scalar => message ),
-        )
-      end
-
-      { value: form[:values], parsed_fragments: form[:parsed_fragments] }
-    end
-
-    def outputs
-      {  }
-    end #FIXME
   end
-
-
 end
 
 class BlaTest < Minitest::Spec
@@ -51,16 +15,30 @@ class BlaTest < Minitest::Spec
 
 
 
-  entity = Module.new do
+  price_entity = Module.new do
     extend Trailblazer::Activity::Railway(name: :price)
 
     pass Subprocess(amount)
     pass Subprocess(currency)
   end
 
-  price_scalar = Transform::Schema.Scalar(:price, processor: entity)
+  price_scalar = Transform::Schema.Scalar(:price, processor: price_entity)
+  # price_scalar = Transform::Schema.Scalar(:price, processor: entity)
 
-  pp price_scalar.( {value: { price:{ amount: "9.1", currency: "1.2" }}} )
+
+  items_scalar = Transform::Schema.Scalar(:items, processor: Transform::Process::Collection.new(activity: FlowTest::Amount) )
+
+  # the "real" invoice
+  invoice_entity = Module.new do
+    extend Trailblazer::Activity::Railway(name: :price)
+
+    pass Subprocess( price_scalar )
+    pass Subprocess( currency )
+    pass Subprocess( items_scalar )
+  end
+
+  pp invoice_entity.( {value: { price:{ amount: "9.1", currency: "1.2" }, currency: "8.1",
+    items: ["1.1", "2.1"] }} )
 raise
 
 

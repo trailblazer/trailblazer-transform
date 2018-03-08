@@ -46,6 +46,7 @@ puts "X#{name} @@@@@ #{ctx.inspect}"
 
 
           step Parse::Hash::Step::Read.new(name: name), Output(:failure) => End(:required) # writes fragment to :{value}.
+
           step ->(ctx, value:, **) { ctx[:read_fragment] = value; puts "@@@@@ #{value.inspect}";true }
         # pass Schema.method(:write_parsed)
 
