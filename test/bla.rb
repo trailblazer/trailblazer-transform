@@ -8,8 +8,8 @@ end
 
 class BlaTest < Minitest::Spec
 
-  amount = Transform::Schema.Scalar(:amount, processor: FlowTest::Amount)
-  currency = Transform::Schema.Scalar(:currency, processor: FlowTest::Amount)
+  amount = Transform::Schema.Binding(:amount, processor: FlowTest::Amount)
+  currency = Transform::Schema.Binding(:currency, processor: FlowTest::Amount)
 
   # pp amount.( {document: { amount: "9.1", currency: "1.2" }} )
 
@@ -22,12 +22,12 @@ class BlaTest < Minitest::Spec
     pass Subprocess(currency)
   end
 
-  price_scalar = Transform::Schema.Scalar(:price, processor: price_entity)
-  # price_scalar = Transform::Schema.Scalar(:price, processor: entity)
+  price_scalar = Transform::Schema.Binding(:price, processor: price_entity)
+  # price_scalar = Transform::Schema.Binding(:price, processor: entity)
 
 
-  amounts_scalar = Transform::Schema.Scalar(:amounts, processor: Transform::Process::Collection.new(activity: FlowTest::Amount) )
-  figures_scalar = Transform::Schema.Scalar(:figures, processor: Transform::Process::Collection.new(activity: price_entity) )
+  amounts_scalar = Transform::Schema.Binding(:amounts, processor: Transform::Process::Collection.new(activity: FlowTest::Amount) )
+  figures_scalar = Transform::Schema.Binding(:figures, processor: Transform::Process::Collection.new(activity: price_entity) )
 
   # the "real" invoice
   invoice_entity = Module.new do
@@ -51,15 +51,15 @@ raise
 
   price_entity = Transform::Entity.new(
     [
-      Transform::Schema.Scalar(:amount, processor: FlowTest::Amount),
-      Transform::Schema.Scalar(:menge, processor: FlowTest::Amount)
+      Transform::Schema.Binding(:amount, processor: FlowTest::Amount),
+      Transform::Schema.Binding(:menge, processor: FlowTest::Amount)
     ]
   )
   # returns a "price object (parsed, value, msg)"
 
   invoice_entity = Transform::Entity.new(
     [
-      Transform::Schema.Scalar(:price, processor: price_entity ),
+      Transform::Schema.Binding(:price, processor: price_entity ),
     ]
   )
 

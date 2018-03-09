@@ -18,7 +18,7 @@ module Trailblazer
       # If the placement/wiring of automatically provided {activity} doesn't suit you,
       # use {:override}. # TODO, MORE DOCS.
       def property(activity, name, processor:, **options)
-        flow = Scalar(name, processor: processor)
+        flow = Binding(name, processor: processor)
 
         insert(activity, name, processor: flow, **options)
       end
@@ -30,24 +30,19 @@ module Trailblazer
       end
 
       require "trailblazer/context"
-      def Scalar(name, processor:, **options)
+      def Binding(name, processor:, **options)
          flow = Module.new do
           extend Activity::Railway(name: name)
 
-          step task: -> ((ctx, flow_options), circuit_options) do
-puts "X#{name} @@@@@ #{ctx.inspect}"
-
-            new_ctx = Trailblazer::Context(ctx)
-            new_ctx[:document] = ctx[:value]
-
-            [ Trailblazer::Activity::Right, [new_ctx, flow_options], circuit_options ]
-          end
+          # create a new "scope":
+          step task: Binding.method(:scope)
 
 
 
           step Parse::Hash::Step::Read.new(name: name), Output(:failure) => End(:required) # writes fragment to :{value}.
 
-          step ->(ctx, value:, **) { ctx[:read_fragment] = value; puts "@@@@@ #{value.inspect}";true }
+          # "property"
+          step ->(ctx, value:, **) { ctx[:read_fragment] = value; puts "@@@@@#{name} #{value.inspect}";true }
         # pass Schema.method(:write_parsed)
 
           pass Subprocess(processor), Output(:success) => Track(:success)#, Output(:fail_fast) => "required"
@@ -55,16 +50,31 @@ puts "X#{name} @@@@@ #{ctx.inspect}"
 
 
 
+          step task: Binding.method(:unscope)
+        end
+      end
 
-          pass task: ->((new_ctx, flow_options), circuit_options) do
+      module Binding
+        module_function
 
-              ctx, scalar_values = new_ctx.decompose
+        # New context for a property.
+        def scope((ctx, flow_options), **circuit_options)
+          new_ctx = Trailblazer::Context(ctx)
 
-              ctx[name] = scalar_values
-puts "XXX#{name} @@@@@ #{ctx.inspect}"
+          new_ctx[:document] = ctx[:value]
 
-            [ Trailblazer::Activity::Right, [ctx, flow_options], circuit_options ]
-          end
+          return Trailblazer::Activity::Right, [new_ctx, flow_options], circuit_options
+        end
+
+        def unscope((new_ctx, flow_options), **circuit_options)
+          ctx, scalar_values = new_ctx.decompose
+
+# puts "#{name}@@@@@ #{scalar_values.inspect}" if name == :price
+
+            # write
+          ctx[name] = scalar_values
+
+          return Trailblazer::Activity::Right, [ctx, flow_options], circuit_options
         end
       end
 
