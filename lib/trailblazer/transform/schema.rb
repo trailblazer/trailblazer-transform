@@ -45,12 +45,13 @@ module Trailblazer
           step ->(ctx, value:, **) { ctx[:read_fragment] = value; puts "@@@@@#{name} #{value.inspect}";true }
         # pass Schema.method(:write_parsed)
 
+            # contraint: processor doesn't know its name.
           pass Subprocess(processor), Output(:success) => Track(:success)#, Output(:fail_fast) => "required"
-          # pass Transform::Process::Write.new(writer: "#{name}=")
+          # pass Transform::Process::Write.new(name: name)
 
+          pass task: Binding.method(:unscope)
 
-
-          step task: Binding.method(:unscope)
+          pass task: Binding::Write.new(name)
         end
       end
 
@@ -71,10 +72,19 @@ module Trailblazer
 
 # puts "#{name}@@@@@ #{scalar_values.inspect}" if name == :price
 
-            # write
-          ctx[name] = scalar_values
+          return Trailblazer::Activity::Right, [scalar_values, ctx, flow_options], circuit_options
+        end
 
-          return Trailblazer::Activity::Right, [ctx, flow_options], circuit_options
+        class Write
+          def initialize(name)
+            @name = name
+          end
+
+          def call((new_ctx, ctx, flow_options), **circuit_options)
+            ctx[@name] = new_ctx
+
+            return Trailblazer::Activity::Right, [ctx, flow_options], circuit_options
+          end
         end
       end
 
