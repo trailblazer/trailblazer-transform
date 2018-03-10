@@ -12,22 +12,19 @@ class BlaTest < Minitest::Spec
     value = value.sub(",", ".")
     value = value.to_f
 
-    my_state = my_state.merge(message: {})
+    if value == 9.1
+      my_state = my_state.merge(message: {nine: true})
+    else
+      my_state = my_state.merge(message_: {})
+    end
 
     return Trailblazer::Activity::Right, [ [value, my_state, data], flow_options ]
   end
-
-  def self.finalize(((value, my_state, data), flow_options), **)
-    my_state = my_state.merge( value: value )
-
-                                                # DISCUSS.
-    return Trailblazer::Activity::Right, [ [my_state, my_state, data], flow_options ]
-  end
                         # FIXME
-  def self.write(name, ((state, _, data), flow_options), **)
-    data = data.merge( name => state )
+  def self.write(name, ((value, my_state, data), flow_options), **)
+    data = data.merge( name => [value, my_state] )
 
-    return Trailblazer::Activity::Right, [ [state, _, data], flow_options ]
+    return Trailblazer::Activity::Right, [ [value, my_state, data], flow_options ]
   end
 
   document = {
@@ -49,33 +46,71 @@ class BlaTest < Minitest::Spec
     ]
   }
 
-  # fragment        = document[:price] #
-  data            = {}
+
+  def prepare(fragment)
+
+  end
+
+  # fragment        = document #
+your_state      = {}.freeze
+data            = {}
+circuit_options = { fragment: document }.freeze
+
 
 # :price
-  your_state      = {}.freeze
-  circuit_options = { fragment: document }.freeze
+# price_state      = {}.freeze
 
-signal, res = Transform::Parse::Hash::Step::Read.new(name: :price).( [ [nil, your_state, data], {}], circuit_options )
-signal, res = Transform::Parse::Hash::Step.method(:track_read_value).( res, circuit_options )
+# signal, res = Transform::Parse::Hash::Step::Read.new(name: :price).( [ [nil, price_state, data], {}], circuit_options )
+# signal, res = Transform::Parse::Hash::Step.method(:track_read_value).( res, circuit_options )
 
-pp res; raise
+# pp res; raise
+  fragment        = document[:price] #
+ circuit_options = { fragment: fragment, data: data }.freeze
+
+  # pp circuit_options
+
   # :amount
+ your_state      = {}.freeze
+ # data            = res[0][2]
+ data            = {}
   signal, res = Transform::Parse::Hash::Step::Read.new(name: :amount).( [ [nil, your_state, data], {}], circuit_options )
   signal, res = Transform::Parse::Hash::Step.method(:track_read_value).( res, circuit_options )
   signal, res = process_amount( res, circuit_options )
-  signal, res = finalize( res, circuit_options )
-  signal, res = write(:amount, res, circuit_options )
+ signal, res = write(:amount, res, circuit_options )
+
   # :currency
-  signal, res = Transform::Parse::Hash::Step::Read.new(name: :currency).( res, circuit_options )
+ your_state      = {}.freeze
+ data            = res[0][2]
+  signal, res = Transform::Parse::Hash::Step::Read.new(name: :currency).( [ [nil, your_state, data], {}], circuit_options )
   signal, res = Transform::Parse::Hash::Step.method(:track_read_value).( res, circuit_options )
   signal, res = process_amount( res, circuit_options )
-  signal, res = finalize( res, circuit_options )
-  signal, res = write(:currency, res, circuit_options )
+ signal, res = write(:currency, res, circuit_options )
+
+  # {data} is now representing the "collect { amount, currency }"
+
+ # data for {price}
+ data = circuit_options[:data]
+
+ res = [
+  [
+   res[0][2],
+   {price_status: "eh"},
+   data # price data
+  ],
+  res[1]
+ ]
+
+
+
+ # res = [ [res[0][2], {}, {}], res[1] ]
+
+# signal, res = finalize( res, circuit_options )
+signal, res = write(:price, res, circuit_options )
+
 
   puts "hallo@"
   pp res
-exit
+raise
 
 
 
