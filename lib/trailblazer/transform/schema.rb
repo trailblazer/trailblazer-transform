@@ -35,14 +35,16 @@ module Trailblazer
           extend Activity::Railway(name: name)
 
           # create a new "scope":
-          step task: Binding.method(:scope)
+          # step task: Binding.method(:scope)
 
 
 
-          step Parse::Hash::Step::Read.new(name: name), Output(:failure) => End(:required) # writes fragment to :{value}.
+          step task: Parse::Hash::Step::Read.new(name: name), Output(:failure) => End(:required) # writes fragment to :{value}.
+
+
 
           # "property"
-          step ->(ctx, value:, **) { ctx[:read_fragment] = value; puts "@@@@@#{name} #{value.inspect}";true }
+          ###step ->(ctx, value:, **) { ctx[:read_fragment] = value; puts "@@@@@#{name} #{value.inspect}";true }
         # pass Schema.method(:write_parsed)
 
             # contraint: processor doesn't know its name.
@@ -57,6 +59,7 @@ module Trailblazer
 
       module Binding
         module_function
+
 
         # New context for a property.
         def scope((ctx, flow_options), **circuit_options)
