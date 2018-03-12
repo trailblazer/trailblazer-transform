@@ -69,19 +69,20 @@ circuit_options = { fragment: document }.freeze
 
   # pp circuit_options
 
+ res= [[nil,{},{}],{}]
+
   # :amount
- your_state      = {}.freeze
- # data            = res[0][2]
- data            = {}
-  signal, res = Transform::Parse::Hash::Step::Read.new(name: :amount).( [ [nil, your_state, data], {}], circuit_options )
+ property_args = [ nil, {}.freeze, res[0][2] ]
+
+  signal, res = Transform::Parse::Hash::Step::Read.new(name: :amount).( [ property_args, {}], circuit_options )
   signal, res = Transform::Parse::Hash::Step.method(:track_read_value).( res, circuit_options )
   signal, res = process_amount( res, circuit_options )
  signal, res = write(:amount, res, circuit_options )
 
   # :currency
- your_state      = {}.freeze
- data            = res[0][2]
-  signal, res = Transform::Parse::Hash::Step::Read.new(name: :currency).( [ [nil, your_state, data], {}], circuit_options )
+ property_args = [ nil, {}.freeze, res[0][2] ]
+
+  signal, res = Transform::Parse::Hash::Step::Read.new(name: :currency).( [ property_args, {}], circuit_options )
   signal, res = Transform::Parse::Hash::Step.method(:track_read_value).( res, circuit_options )
   signal, res = process_amount( res, circuit_options )
  signal, res = write(:currency, res, circuit_options )
