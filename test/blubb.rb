@@ -33,24 +33,25 @@ end
 def read_price(fragment)
   Value.new(fragment.parse[:price])
 end
-def process_price(fragment)
-  bla = price_entity_processor(fragment, {})
+def process_price(value)
+  bla = price_entity_processor(value, {})
 
-  Processed.new(fragment, bla)
+  Processed.new(value, bla)
 end
 
 # entity iterates bindings
 #  binding can be "nested" or scalar thing
 #  binding always returns Processed structure
 #
-def price_entity_processor(fragment, entity_processed) # { name: <Processed>}
+def price_entity_processor(original_value, entity_processed) # { name: <Processed>}
+
  # binding?
-  value     = read_amount( fragment.content )                       # read
+  value     = read_amount( original_value.content )                       # read
   processed = process_amount( value )
   entity_processed = entity_processed.merge( {amount: processed})   # write
 
 
-  value     = read_currency( fragment.content )
+  value     = read_currency( original_value.content )
   processed = process_currency( value )
 
   entity_processed = entity_processed.merge( {currency: processed})
@@ -75,6 +76,25 @@ def invoice_entity_processor(fragment, entity_processed) # { name: <Processed>}
   entity_processed = entity_processed.merge( {items: processed})  # write # returns ProcessedCollection[ <Processed>, ... ]
 
   entity_processed
+end
+
+def read_items(fragment) # <Fragment>
+  Value.new(fragment.parse[:items].parse) # TODO: return Parse::Value::Array
+end
+
+# i am a COLLECTION entity?
+def process_items(value) # <Parse::Value::Array>
+  processed_ary = value.content.collect do |item| # this is kind of "read_price"
+    # read
+    value = Value.new(Fragment.new(item.parse)) # FIXME: wtf?
+
+    processed = process_price( value )
+    # write  => collect
+  end
+  # bla = price_entity_processor(value, {})
+
+
+  Processed.new(value, processed_ary)
 end
 
 fragment  = entity(   price:   entity({ amount: "9.1", currency: "AUD" }),
