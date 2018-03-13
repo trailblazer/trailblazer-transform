@@ -71,24 +71,28 @@ def invoice_entity_processor(fragment, entity_processed) # { name: <Processed>}
   processed = process_price( value )
   entity_processed = entity_processed.merge( {price: processed})  # write
 
-  value     = read_items( fragment.content )                      # read
-  processed = process_items( value )
+  value     = read_items( fragment.content, :items )                      # read
+  processed = process_items( value, :process_price )
   entity_processed = entity_processed.merge( {items: processed})  # write # returns ProcessedCollection[ <Processed>, ... ]
+
+  value     = read_items( fragment.content, :currencies )                      # read
+  processed = process_items( value, :process_currency )
+  entity_processed = entity_processed.merge( {currencies: processed})  # write # returns ProcessedCollection[ <Processed>, ... ]
 
   entity_processed
 end
 
-def read_items(fragment) # <Fragment>
-  Value.new(fragment.parse[:items].parse) # TODO: return Parse::Value::Array
+def read_items(fragment, name) # <Fragment>
+  Value.new(fragment.parse[name].parse) # TODO: return Parse::Value::Array
 end
 
 # i am a COLLECTION entity?
-def process_items(value) # <Parse::Value::Array>
+def process_items(value, method) # <Parse::Value::Array>
   processed_ary = value.content.collect do |item| # this is kind of "read_price"
     # read
     value = Value.new(Fragment.new(item.parse)) # FIXME: wtf?
 
-    processed = process_price( value )
+    processed = send(method, value )
     # write  => collect
   end
   # bla = price_entity_processor(value, {})
@@ -99,7 +103,9 @@ end
 
 fragment  = entity(   price:   entity({ amount: "9.1", currency: "AUD" }),
 
-  items: entity([ entity({ amount: "1.2", currency: "EUR" }), entity({ amount: "2.3", currency: "USD" })  ])
+  items: entity([ entity({ amount: "1.2", currency: "EUR" }), entity({ amount: "2.3", currency: "USD" })  ]),
+
+  currencies: entity( [ entity("ILS"), entity("CHF") ] )
 
 )
 
