@@ -1,3 +1,9 @@
+require "simplecov"
+SimpleCov.start do
+  add_group "Trailblazer-Transform", "lib"
+  add_group "Tests", "test"
+end
+
 $LOAD_PATH.unshift File.expand_path("../../lib", __FILE__)
 require "trailblazer-transform"
 

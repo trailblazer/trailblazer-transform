@@ -37,22 +37,20 @@ module Trailblazer
           # create a new "scope":
           step task: Binding.method(:scope)
 
-
-
           step Parse::Hash::Step::Read.new(name: name), Output(:failure) => End(:required) # writes fragment to :{value}.
 
           # "property"
-          step ->(ctx, value:, **) { ctx[:read_fragment] = value; puts "@@@@@#{name} #{value.inspect}";true }
-        # pass Schema.method(:write_parsed)
+          step ->(ctx, value:, **) { ctx[:read_fragment] = value; puts "@@@@@#{name} #{value.inspect}"; true }
+          # pass Schema.method(:write_parsed)
 
-            # contraint: processor doesn't know its name.
-          pass Subprocess(processor), Output(:success) => Track(:success)#, Output(:fail_fast) => "required"
+          # contraint: processor doesn't know its name.
+          pass Subprocess(processor), Output(:success) => Track(:success) #, Output(:fail_fast) => "required"
           # pass Transform::Process::Write.new(name: name)
 
           pass task: Binding.method(:unscope)
 
           pass task: Binding::Write.new(name)
-        end
+         end
       end
 
       module Binding
@@ -70,7 +68,7 @@ module Trailblazer
         def unscope((new_ctx, flow_options), **circuit_options)
           ctx, scalar_values = new_ctx.decompose
 
-# puts "#{name}@@@@@ #{scalar_values.inspect}" if name == :price
+          # puts "#{name}@@@@@ #{scalar_values.inspect}" if name == :price
 
           return Trailblazer::Activity::Right, [scalar_values, ctx, flow_options], circuit_options
         end
@@ -94,10 +92,10 @@ module Trailblazer
         return instance_exec(processor, &override) if override
 
         connections = {} # with empty connections, processor.success goes to the next property, everything else Ends.
-        connections = { Activity::DSL::Helper::Output(:failure)  => Activity::DSL::Helper::Track(:success) ,
-                        Activity::DSL::Helper::Output(:required) => Activity::DSL::Helper::Track(:success) } # "Reform-style": parse and validate all
+        connections = {Activity::DSL::Helper::Output(:failure) => Activity::DSL::Helper::Track(:success),
+                       Activity::DSL::Helper::Output(:required) => Activity::DSL::Helper::Track(:success)} # "Reform-style": parse and validate all
 
-        activity.task Activity::DSL::Helper::Subprocess( processor ), connections
+        activity.task Activity::DSL::Helper::Subprocess(processor), connections
       end
     end
   end
