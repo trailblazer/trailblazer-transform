@@ -9,7 +9,7 @@ module Trailblazer
             @name = name
           end
 
-                # We could use Representable here.
+          # We could use Representable here.
           def call(ctx, document:, **)
             return unless document.key?(@name)
             ctx[:value] = document[@name]

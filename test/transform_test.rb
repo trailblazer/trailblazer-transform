@@ -3,31 +3,31 @@ require "test_helper"
 require "ostruct"
 
 class TransformTest < Minitest::Spec
-
   Parse = Trailblazer::Transform::Parse
 
 require "trailblazer/activity"
 
 Activity = Trailblazer::Activity
 
-
-
 # ::property
 # @needs :value
 module PriceFloat
   extend Activity::FastTrack()
+
   module_function
 
   def error_string(ctx, value:, **)
     ctx[:error] = "#{value.inspect} is blank string"
   end
+
   def error_format(ctx, value:, **)
     ctx[:error] = "#{value.inspect} is wrong format"
   end
 
   def filled?(ctx, value:, **)
-    ! value.nil?
+    !value.nil?
   end
+
   # TODO: use dry-types here
   def coerce_string(ctx, value:, **)
     value.to_s
@@ -62,21 +62,20 @@ end
 
 module Steps
   module_function
+
   # I could be an End event, no step
   def error_required(ctx, **)
     ctx[:error] = "Fragment :unit_price not found"
     false
   end
+
   def error_format(ctx, value:, **)
     ctx[:error] = "#{value.inspect} is wrong format"
   end
 
-
   def set(ctx, value:, model:, **)
     model.unit_price = value
   end
-
-
 
   def self.set(ctx, value:, model:, **)
     model.unit_price = value
@@ -129,7 +128,7 @@ class UnitPriceOrItems
   step Steps.method(:set), Output(:success) => "End.success"
 
   # this used to be implicit by placing `collection :items` after `property :unit_price`.
-  step method(:items_present?), magnetic_to: [:fail_fast], fail_fast: true# success===> run Collection(PriceFloat), fail==>invalid, nothing given
+  step method(:items_present?), magnetic_to: [:fail_fast], fail_fast: true # success===> run Collection(PriceFloat), fail==>invalid, nothing given
   fail :error_required, magnetic_to: [:fail_fast], fail_fast: true
 
   step Parse::Hash::Step::Read.new(name: :items)
@@ -143,27 +142,24 @@ class UnitPriceOrItems
 
   step method(:set_items)
 
-
   include Steps
-
 
   def error_required(ctx, **)
     ctx[:error] = "Fragment :unit_price not found, and no items"
     false
   end
-
 end
 
   describe "UnitPriceOrItems" do
     it "fragment not found" do
-      signal, (ctx, _) = UnitPriceOrItems.( [ { document: {} }, {} ] )
+      signal, (ctx, _) = UnitPriceOrItems.([{document: {}}, {}])
 
       signal.to_h[:semantic].must_equal :fail_fast # FailFast signalizes "nothing found, for both paths"
       ctx[:error].must_equal %{Fragment :unit_price not found, and no items}
     end
 
     it ":unit_price given" do
-      signal, (ctx, _) = UnitPriceOrItems.( [ { document: { unit_price: " 2.7  " }, model: OpenStruct.new }, {} ] )
+      signal, (ctx, _) = UnitPriceOrItems.([{document: {unit_price: " 2.7  "}, model: OpenStruct.new}, {}])
 
       signal.to_h[:semantic].must_equal :success # FailFast signalizes "nothing found, for both paths"
       ctx[:error].must_be_nil
@@ -171,14 +167,14 @@ end
     end
 
     it "incorrect :unit_price" do
-      signal, (ctx, _) = UnitPriceOrItems.( [ {document: { unit_price: "999" }}, {} ] )
+      signal, (ctx, _) = UnitPriceOrItems.([{document: {unit_price: "999"}}, {}])
 
       signal.to_h[:semantic].must_equal :failure # FailFast signalizes "nothing found, for both paths"
       ctx[:error].must_equal %{"999" is wrong format}
     end
 
     it ":items given" do
-      signal, (ctx, _) = UnitPriceOrItems.( [ { document: {items: [ "9.9" ]}, model: OpenStruct.new, instance: PriceFloat }, {} ] )
+      signal, (ctx, _) = UnitPriceOrItems.([{document: {items: ["9.9"]}, model: OpenStruct.new, instance: PriceFloat}, {}])
       # signal, (ctx, _) = activity.( [ { unit_price: "", items: [ "9.9" ], model: OpenStruct.new }, {} ], exec_context: UnitPriceOrItems.new )
 
       signal.to_h[:semantic].must_equal :success # FailFast signalizes "nothing found, for both paths"
@@ -204,13 +200,10 @@ class Item
   # property :unit_price
 
   # @needs :document
-  step Subprocess( DeserializeUnitPrice ), id: "deserialize_unit_price"
+  step Subprocess(DeserializeUnitPrice), id: "deserialize_unit_price"
 
   step method(:model)
 end
-
-
-
 
   # "custom" chainset with items that are nested, again.
 class UnitPriceOrNestedItems
@@ -226,7 +219,6 @@ class UnitPriceOrNestedItems
     model.items = value
   end
 
-
   step Parse::Hash::Step::Read.new(name: :unit_price), fail_fast: true # sucess: fragment found
   step task: PriceFloat, id: "PriceFloat",
     PriceFloat.outputs[:fail_fast] => Track(:fail_fast),
@@ -235,14 +227,13 @@ class UnitPriceOrNestedItems
   step Steps.method(:set), Output(:success) => "End.success"
 
   # this used to be implicit by placing `collection :items` after `property :unit_price`.
-  step UnitPriceOrItems.method(:items_present?), magnetic_to: [:fail_fast], fail_fast: true# success===> run Collection(PriceFloat), fail==>invalid, nothing given
+  step UnitPriceOrItems.method(:items_present?), magnetic_to: [:fail_fast], fail_fast: true # success===> run Collection(PriceFloat), fail==>invalid, nothing given
   fail method(:error_required), magnetic_to: [:fail_fast], fail_fast: true
 
   # read :items
   step Parse::Hash::Step::Read.new(name: :items)
 
-  step Subprocess( Trailblazer::Transform::Process::Collection.new(activity: Item) ), id: "items"
-
+  step Subprocess(Trailblazer::Transform::Process::Collection.new(activity: Item)), id: "items"
 
   step method(:set_items)
 end
@@ -283,25 +274,24 @@ module UnitPriceOrNestedItems3
   extend Activity::Path()
 
   module_function
+
   def items_present?(ctx, document:, **)
     return unless document.key?(:items)
     document[:items].size > 0
   end
 
   # property :unit_price
-  task Parse::Hash::Step::Read.new(name: :unit_price), Output(Trailblazer::Activity::Left, :failure) => Path( track_color: :items_track ) do
+  task Parse::Hash::Step::Read.new(name: :unit_price), Output(Trailblazer::Activity::Left, :failure) => Path(track_color: :items_track) do
     task UnitPriceOrNestedItems3.method(:items_present?), Output(Trailblazer::Activity::Left, :failure) => Track(:required), id: "items_present?"
 
     # collection :items, populator:  do                         DeserializeItems
     task Parse::Hash::Step::Read.new(name: :items), Output(Trailblazer::Activity::Left, :failure) => Track(:failure)
-    task Subprocess( Trailblazer::Transform::Process::Collection.new(activity: Item) ), Output(Trailblazer::Activity::Left, :failure) => Track(:failure)
+    task Subprocess(Trailblazer::Transform::Process::Collection.new(activity: Item)), Output(Trailblazer::Activity::Left, :failure) => Track(:failure)
     task Trailblazer::Transform::Process::Write.new(writer: :items=), Output(:success) => "End.success"
-
   end
 
   task Subprocess(PriceFloat), Output(:fail_fast) => "items_present?", Output(:failure) => Track(:failure)
   task Trailblazer::Transform::Process::Write.new(writer: :unit_price=)
-
 
   task UnitPriceOrNestedItems.method(:error_required), magnetic_to: [:required], Output(Trailblazer::Activity::Left, :failure) => Track(:required)
 
@@ -323,23 +313,21 @@ module UnitPriceOrNestedItems4
   module CollectionItems
     extend Activity::Railway()
 
-    step Parse::Hash::Step::Read.new(name: :items),      Output(:failure) => End(:required)
-    step Subprocess( Trailblazer::Transform::Process::Collection.new(activity: Item) )
+    step Parse::Hash::Step::Read.new(name: :items), Output(:failure) => End(:required)
+    step Subprocess(Trailblazer::Transform::Process::Collection.new(activity: Item))
     step Trailblazer::Transform::Process::Write.new(writer: :items=)
   end
 
   extend Activity::Path()
 
-  task Subprocess( PropertyUnitPrice ) # success/failure/required
+  task Subprocess(PropertyUnitPrice) # success/failure/required
 
-  task Subprocess( CollectionItems ), id: "collection_items", magnetic_to: [:required]
+  task Subprocess(CollectionItems), id: "collection_items", magnetic_to: [:required]
   # task UnitPriceOrNestedItems3.method(:items_present?), Output(Trailblazer::Activity::Left, :failure) => Track(:required), magnetic_to: [:required], Output(:success)=>"collection_items"
-
 
   task task: End(:failure),  magnetic_to: [:failure], type: :End
   task task: End(:required), magnetic_to: [:required], type: :End
 end
-
 
 module UnitPriceOrNestedItems5
   extend Transform::Schema
@@ -368,7 +356,7 @@ puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems5.to_h[:circuit
 
   describe "UnitPriceOrNestedItems" do
     it "fragment not found" do
-      stack, signal, (ctx, _) =  Activity::Trace.(UnitPriceOrNestedItems5, [ { document: {} }, {} ] )
+      stack, signal, (ctx, _) = Activity::Trace.(UnitPriceOrNestedItems5, [{document: {}}, {}])
 
       puts Trailblazer::Activity::Trace::Present.tree(stack)
 
@@ -378,7 +366,7 @@ puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems5.to_h[:circuit
 
     it ":unit_price given" do
       # signal, (ctx, _) = UnitPriceOrNestedItems5.( [ { document: {unit_price: " 2.7  "}, model: OpenStruct.new }, {} ] )
-      stack, signal, (ctx, _) = Activity::Trace.( UnitPriceOrNestedItems5,  [ { document: {unit_price: " 2.7  "}, model: OpenStruct.new }, {} ] )
+      stack, signal, (ctx, _) = Activity::Trace.(UnitPriceOrNestedItems5, [{document: {unit_price: " 2.7  "}, model: OpenStruct.new}, {}])
 
       puts Trailblazer::Activity::Trace::Present.tree(stack)
 
@@ -388,14 +376,14 @@ puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems5.to_h[:circuit
     end
 
     it "incorrect :unit_price" do
-      signal, (ctx, _) = UnitPriceOrNestedItems5.( [ {document: { unit_price: "999" }}, {} ] )
+      signal, (ctx, _) = UnitPriceOrNestedItems5.([{document: {unit_price: "999"}}, {}])
 
       signal.to_h[:semantic].must_equal :failure # FailFast signalizes "nothing found, for both paths"
       ctx[:error].must_equal %{"999" is wrong format}
     end
 
     it ":items given" do
-      signal, (ctx, _) = UnitPriceOrNestedItems5.( [ {document: { items: [ {unit_price: "9.9"} ] }, model: OpenStruct.new }, {} ] )
+      signal, (ctx, _) = UnitPriceOrNestedItems5.([{document: {items: [{unit_price: "9.9"}]}, model: OpenStruct.new}, {}])
 
       signal.to_h[:semantic].must_equal :success # FailFast signalizes "nothing found, for both paths"
       ctx[:model].inspect.must_equal %{#<OpenStruct items=[#<struct unit_price=990>]>}
@@ -414,21 +402,21 @@ puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems5.to_h[:circuit
   #   ctx[:value]
   describe "PriceFloat" do
     it "fragment nil" do
-      signal, (ctx, _) = PriceFloat.( [ { value: nil }, {} ] )
+      signal, (ctx, _) = PriceFloat.([{value: nil}, {}])
 
       assert_end PriceFloat, signal, :fail_fast
       ctx[:error].must_equal %{nil is blank string}
     end
 
     it "wrong format" do
-      signal, (ctx, _) = PriceFloat.( [ { value: " bla " }, {} ] )
+      signal, (ctx, _) = PriceFloat.([{value: " bla "}, {}])
 
       assert_end PriceFloat, signal, :failure
       ctx[:error].must_equal %{"bla" is wrong format}
     end
 
     it "correct format" do
-      signal, (ctx, _) = PriceFloat.( [ { value: "9.8" }, {} ] )
+      signal, (ctx, _) = PriceFloat.([{value: "9.8"}, {}])
 
       assert_end PriceFloat, signal, :success
       ctx[:value].must_equal 980
@@ -445,28 +433,28 @@ puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems5.to_h[:circuit
   #   ctx[:error]
   #   ctx[:value]
   it "fragment not found" do
-    signal, (ctx, _) = DeserializeUnitPrice.( [ { document: {} }, {} ] )
+    signal, (ctx, _) = DeserializeUnitPrice.([{document: {}}, {}])
 
     signal.to_h[:semantic].must_equal :fail_fast
     ctx[:error].must_equal %{Fragment :unit_price not found}
   end
 
   it "fragment nil" do
-    signal, (ctx, _) = DeserializeUnitPrice.( [ {document: { unit_price: nil }}, {} ] )
+    signal, (ctx, _) = DeserializeUnitPrice.([{document: {unit_price: nil}}, {}])
 
     signal.to_h[:semantic].must_equal :fail_fast
     ctx[:error].must_equal %{nil is blank string}
   end
 
   it "wrong format" do
-    signal, (ctx, _) = DeserializeUnitPrice.( [ { document: { unit_price: " bla " } }, {} ] )
+    signal, (ctx, _) = DeserializeUnitPrice.([{document: {unit_price: " bla "}}, {}])
 
     signal.to_h[:semantic].must_equal :failure
     ctx[:error].must_equal %{"bla" is wrong format}
   end
 
   it "correct format" do
-    signal, (ctx, _) = DeserializeUnitPrice.( [ { document: { unit_price: "9.8"}, model: OpenStruct.new }, {} ] )
+    signal, (ctx, _) = DeserializeUnitPrice.([{document: {unit_price: "9.8"}, model: OpenStruct.new}, {}])
 
     signal.to_h[:semantic].must_equal :success
     ctx[:model].inspect.must_equal %{#<OpenStruct unit_price=980>}
@@ -498,7 +486,6 @@ puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems5.to_h[:circuit
     end
   end
 
-
   class Transformer::Logic
     &parse(:unit_price)
       &nilify
@@ -514,11 +501,8 @@ puts Trailblazer::Activity::Introspect.Cct(UnitPriceOrNestedItems5.to_h[:circuit
     &parse(:items)[0]
   end
 
-
-
   problem with UPDATE is, we always have to check all fields, and hence "require" all fields to be filled out.
   Even if it's just a partial update, which in JSON would produce a smaller subset document, we need to go through all
   fields. That's why web forms suck (without JS)
 =end
-
 end

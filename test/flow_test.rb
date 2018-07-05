@@ -27,18 +27,21 @@ class FlowTest < Minitest::Spec
   # @needs :value
   module Amount
     extend Trailblazer::Activity::Railway()
+
     module_function
 
     def error_string(ctx, value:, **)
       ctx[:error] = "#{value.inspect} is blank string"
     end
+
     def error_format(ctx, value:, **)
       ctx[:error] = "#{value.inspect} is wrong format"
     end
 
     def filled?(ctx, value:, **)
-      ! value.nil?
+      !value.nil?
     end
+
     # TODO: use dry-types here
     def coerce_string(ctx, value:, **)
       value.to_s
@@ -52,10 +55,10 @@ class FlowTest < Minitest::Spec
 
     def my_format(ctx, value:, **)
       schema = Dry::Validation.Schema do
-        required(:value).filled( format?: /^\d\.\d$/ )
+        required(:value).filled(format?: /^\d\.\d$/)
       end
 
-      result = schema.( value: value )
+      result = schema.(value: value)
 
       ctx[:schema_result] = result
 
@@ -88,7 +91,7 @@ class FlowTest < Minitest::Spec
     extend Trailblazer::Activity::Path()
 
     pass ->(ctx, value:, **) { ctx[:value] = Date.parse(value) }
-    _end task: End(:required)#, magnetic_to: [:required]
+    _end task: End(:required) #, magnetic_to: [:required]
   end
 
   class Expense < Transform::Flow
@@ -101,7 +104,7 @@ class FlowTest < Minitest::Spec
 
   it "wrong {amount}" do
     read_data        = Struct.new(:amount, :invoice_date).new # raw parsed data.
-    signal, (ctx, _) = Expense.activity.( [{ document: { amount: "  34.sd" }, read_data: read_data }, {}] )
+    signal, (ctx, _) = Expense.activity.([{document: {amount: "  34.sd"}, read_data: read_data}, {}])
 
     pp ctx
   end
@@ -110,7 +113,7 @@ class FlowTest < Minitest::Spec
     model_from_populator = Struct.new(:amount, :invoice_date).new # i want well-formatted, typed data, only!
     read_data            = Struct.new(:amount, :invoice_date).new # raw parsed data.
 
-    signal, (ctx, _) = Expense.activity.( [{ document: { amount: "  3.0" }, model: model_from_populator, read_data: read_data }, {}] )
+    signal, (ctx, _) = Expense.activity.([{document: {amount: "  3.0"}, model: model_from_populator, read_data: read_data}, {}])
 
     # outer_model.invoice = model_from_populator
 

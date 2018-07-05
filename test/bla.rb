@@ -7,13 +7,10 @@ module Trailblazer::Transform
 end
 
 class BlaTest < Minitest::Spec
-
   amount = Transform::Schema.Binding(:amount, processor: FlowTest::Amount)
   currency = Transform::Schema.Binding(:currency, processor: FlowTest::Amount)
 
   # pp amount.( {document: { amount: "9.1", currency: "1.2" }} )
-
-
 
   price_entity = Module.new do
     extend Trailblazer::Activity::Railway(name: :price)
@@ -25,29 +22,25 @@ class BlaTest < Minitest::Spec
   price_scalar = Transform::Schema.Binding(:price, processor: price_entity)
   # price_scalar = Transform::Schema.Binding(:price, processor: entity)
 
-
-  amounts_scalar = Transform::Schema.Binding(:amounts, processor: Transform::Process::Collection.new(activity: FlowTest::Amount) )
-  figures_scalar = Transform::Schema.Binding(:figures, processor: Transform::Process::Collection.new(activity: price_entity) )
+  amounts_scalar = Transform::Schema.Binding(:amounts, processor: Transform::Process::Collection.new(activity: FlowTest::Amount))
+  figures_scalar = Transform::Schema.Binding(:figures, processor: Transform::Process::Collection.new(activity: price_entity))
 
   # the "real" invoice
   invoice_entity = Module.new do
     extend Trailblazer::Activity::Railway(name: :price)
 
-    pass Subprocess( price_scalar )
-    pass Subprocess( currency )
-    pass Subprocess( amounts_scalar )
-    pass Subprocess( figures_scalar )
+    pass Subprocess(price_scalar)
+    pass Subprocess(currency)
+    pass Subprocess(amounts_scalar)
+    pass Subprocess(figures_scalar)
   end
 
-  pp invoice_entity.( {value: { price:{ amount: "9.1", currency: "1.2" }, currency: "8.1",
+  pp invoice_entity.({value: {price: {amount: "9.1", currency: "1.2"}, currency: "8.1",
     amounts: ["1.1", "2.1"],
-    figures: [ { amount: "3.4", currency: "5.6" }, { amount: "9.1", currency: "7.8" }  ]
+    figures: [{amount: "3.4", currency: "5.6"}, {amount: "9.1", currency: "7.8"}]
      }}
   )
 raise
-
-
-
 
   price_entity = Transform::Entity.new(
     [
@@ -59,11 +52,9 @@ raise
 
   invoice_entity = Transform::Entity.new(
     [
-      Transform::Schema.Binding(:price, processor: price_entity ),
+      Transform::Schema.Binding(:price, processor: price_entity),
     ]
   )
-
-
 
   document = {
     amount: "1.2",
@@ -71,7 +62,7 @@ raise
   }
 
 puts "yo"
-  pp invoice_entity.( [{fragment: document}], {} )
+  pp invoice_entity.([{fragment: document}], {})
  #{:parsed_fragments=>
  #  {#<Trailblazer::Activity: {amount}>=>"1.2",
  #   #<Trailblazer::Activity: {menge}>=>"9.9"},
@@ -83,5 +74,4 @@ puts "yo"
  #    #<Dry::Validation::Result output={:value=>"1.2"} errors={}>,
  #   #<Trailblazer::Activity: {menge}>=>
  #    #<Dry::Validation::Result output={:value=>"9.9"} errors={}>}}
-
 end
